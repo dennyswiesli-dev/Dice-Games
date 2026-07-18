@@ -107,7 +107,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .seg{display:flex;border-radius:10px;overflow:hidden;border:2px solid rgba(248,244,230,.25)}
 .seg button{flex:1;border-radius:0;background:transparent;color:var(--ivory-dim);font-size:.85rem;padding:10px 6px}
 .seg button.on{background:var(--ivory);color:var(--pip)}
-.variant-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:4px}
+.variant-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:4px}
 .variant-grid button{
   padding:10px 0;border-radius:10px;background:transparent;color:var(--ivory-dim);
   border:2px solid rgba(248,244,230,.25);font-size:.95rem;
@@ -218,7 +218,7 @@ let history = [];
 
 const $ = sel => document.querySelector(sel);
 const app = $('#app');
-const VARIANTS = [10,15,20,25,30]; // Zielwert; Würfelanzahl = Ziel/5
+const VARIANTS = [10,15,20,25,30,35,40]; // Zielwert; Würfelanzahl = Ziel/5
 
 function diceFor(t){ return t/5; }
 
@@ -432,7 +432,9 @@ function submitAttack(){
   } else if(dmg>0){
     const target = game.players[targetIdx];
     target.lives = target.lives - dmg;
-    let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${game.attackNum} → −${dmg} Leben`;
+    const face = Math.min(game.attackNum, 6);
+    const special = game.attackNum > 6 ? ` (à ${game.attackNum})` : '';
+    let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${face}${special} → −${dmg} Leben`;
     if(!game.biggestHit || dmg > game.biggestHit.dmg){
       game.biggestHit = {attacker:cur.name, victim:target.name, dmg};
     }
@@ -442,7 +444,7 @@ function submitAttack(){
     }
     game.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit'};
   } else {
-    game.msg = {text:`${esc(cur.name)}: keine ${game.attackNum}er gewürfelt — Glück gehabt.`, type:'', hitIdx:-1};
+    game.msg = {text:`${esc(cur.name)}: keine ${Math.min(game.attackNum,6)}er gewürfelt — Glück gehabt.`, type:'', hitIdx:-1};
   }
   game.phase='roll';
   endTurn();
@@ -514,16 +516,18 @@ function renderGame(){
   } else if(game.phase==='attack'){
     const targetIdx = attackTargetIdx(game.currentIdx);
     const tName = targetIdx>=0 ? esc(game.players[targetIdx].name) : '— (alle geschützt)';
+    const face = Math.min(game.attackNum, 6);
+    const special = game.attackNum > 6;
     action = `
       <div class="panel">
         <h2>Angriff! 🎯</h2>
         <div class="attack-head">
-          ${dieSVG(game.attackNum,true,true)}
-          <div class="txt">${esc(cur.name)} jagt <b>${game.attackNum}er</b>.<br>
-          Weiterwürfeln, solange pro Wurf mind. eine ${game.attackNum} fällt.<br>
+          ${dieSVG(face,true,true)}
+          <div class="txt">${esc(cur.name)} jagt <b>${face}er</b>${special?` — jede 6 zählt als <b>${game.attackNum}</b>`:''}.<br>
+          Weiterwürfeln, solange pro Wurf mind. eine ${face} fällt.<br>
           Opfer: <b>${tName}</b></div>
         </div>
-        <label style="text-align:center">Wie viele ${game.attackNum}er liegen am Ende?</label>
+        <label style="text-align:center">Wie viele ${face}er liegen am Ende?</label>
         <div class="stepper">
           <button onclick="changeAttackCount(-1)" aria-label="weniger">−</button>
           <span class="val" id="atkval">${game.attackCount||0}</span>
