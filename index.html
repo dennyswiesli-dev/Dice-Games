@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Das 30er-Spiel</title>
+<title>30er-Spiel</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#16301F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="30er">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -99,6 +107,13 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .seg{display:flex;border-radius:10px;overflow:hidden;border:2px solid rgba(248,244,230,.25)}
 .seg button{flex:1;border-radius:0;background:transparent;color:var(--ivory-dim);font-size:.85rem;padding:10px 6px}
 .seg button.on{background:var(--ivory);color:var(--pip)}
+.variant-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-bottom:4px}
+.variant-grid button{
+  padding:10px 0;border-radius:10px;background:transparent;color:var(--ivory-dim);
+  border:2px solid rgba(248,244,230,.25);font-size:.95rem;
+}
+.variant-grid button.on{background:var(--gold);color:var(--pip);border-color:var(--gold)}
+.variant-grid button small{display:block;font-size:.6rem;font-weight:700;opacity:.8}
 
 /* ---------- player list ---------- */
 .player-card{
@@ -138,7 +153,6 @@ button:disabled{opacity:.4;cursor:not-allowed}
 /* setup list */
 .setup-item{display:flex;align-items:center;gap:10px;background:rgba(248,244,230,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .setup-item .n{flex:1;font-weight:800}
-.setup-item .l{font-family:'Bungee',cursive;color:var(--gold)}
 .setup-item .x{background:none;color:var(--ivory-dim);font-size:1.1rem;padding:4px 8px}
 
 /* ---------- sum grid ---------- */
@@ -148,7 +162,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
   background:var(--ivory);color:var(--pip);
   box-shadow:inset 0 -2px 0 rgba(0,0,0,.15);
 }
-.sumgrid button.s30{background:var(--gold)}
+.sumgrid button.starget{background:var(--gold)}
 .sumgrid button.shigh{background:var(--red);color:#fff}
 
 /* stepper */
@@ -176,6 +190,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .winner .crown{font-size:3.5rem}
 .winner .wname{font-family:'Bungee',cursive;font-size:2rem;color:var(--gold);margin:8px 0 4px}
 .winner p{color:var(--ivory-dim);font-weight:700;margin-bottom:20px}
+.winner .stat{font-size:.85rem;color:var(--ivory-dim);font-weight:700;margin:-10px 0 18px}
 .rank-item{display:flex;align-items:center;gap:10px;background:rgba(248,244,230,.08);border-radius:10px;padding:10px 14px;margin-bottom:8px;text-align:left}
 .rank-item .pos{font-family:'Bungee',cursive;color:var(--gold);width:30px}
 .rank-item .n{flex:1;font-weight:800}
@@ -196,13 +211,16 @@ button:disabled{opacity:.4;cursor:not-allowed}
 'use strict';
 
 /* ================= State ================= */
-let setupPlayers = [];         // [{name, lives}]
-let setupOpts = {zeroRule:false, direction:'next', zeroLimit:2}; // direction: 'next' | 'prev'
+let setupPlayers = [];
+let setupOpts = {target:30, zeroRule:false, direction:'next', zeroLimit:2};
 let game = null;
 let history = [];
 
 const $ = sel => document.querySelector(sel);
 const app = $('#app');
+const VARIANTS = [10,15,20,25,30]; // Zielwert; Würfelanzahl = Ziel/5
+
+function diceFor(t){ return t/5; }
 
 function snapshot(){ history.push(JSON.stringify(game)); if(history.length>60) history.shift(); }
 function undo(){
@@ -216,6 +234,19 @@ function dieSVG(v, big=false, red=false){
   return `<span class="die${big?' big':''}${red?' red':''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
 }
 
+/* ============ Bildschirm-Wachhalten (Wake Lock) ============ */
+let wakeLock = null;
+async function keepAwake(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  }catch(e){ /* nicht unterstützt oder abgelehnt — egal */ }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && game) keepAwake();
+});
+
 /* ================= Setup ================= */
 function renderSetup(){
   const list = setupPlayers.map((p,i)=>`
@@ -225,9 +256,19 @@ function renderSetup(){
       <button class="x" aria-label="${esc(p.name)} entfernen" onclick="removePlayer(${i})">✕</button>
     </div>`).join('');
 
+  const variants = VARIANTS.map(t=>`
+    <button class="${setupOpts.target===t?'on':''}" onclick="setTarget(${t})">${t}er<small>${diceFor(t)} Würfel</small></button>
+  `).join('');
+
   app.innerHTML = `
-    <h1>30er&#8209;Spiel</h1>
+    <h1>${setupOpts.target}er&#8209;Spiel</h1>
     <div class="sub">Lebenspunkte-Tracker für den Würfeltisch</div>
+
+    <div class="panel">
+      <h2>Spielvariante</h2>
+      <div class="variant-grid">${variants}</div>
+      <div class="hint">Ziel: mit ${diceFor(setupOpts.target)} Würfeln mindestens ${setupOpts.target} erreichen (Schnitt 5 pro Würfel). Regeln sind in allen Varianten gleich.</div>
+    </div>
 
     <div class="panel">
       <h2>Spieler hinzufügen</h2>
@@ -274,6 +315,7 @@ function renderSetup(){
   $('#pname').addEventListener('keydown',e=>{if(e.key==='Enter')addPlayer();});
 }
 
+function setTarget(t){ setupOpts.target=t; renderSetup(); }
 function setDir(d){ setupOpts.direction=d; renderSetup(); }
 function changeZeroLimit(d){ setupOpts.zeroLimit = Math.max(1, setupOpts.zeroLimit+d); renderSetup(); }
 
@@ -290,11 +332,14 @@ function startGame(){
   const zeroLimit = Math.max(1, Math.min(setupOpts.zeroLimit, players.length-1));
   game = {
     players, currentIdx:0, initIdx:0, phase:'init',
+    target:setupOpts.target, dice:diceFor(setupOpts.target),
     attackNum:0, attackCount:0, msg:null,
     zeroRule:setupOpts.zeroRule, direction:setupOpts.direction,
-    zeroLimit
+    zeroLimit, turn:1,
+    biggestHit:null /* {attacker, victim, dmg} */
   };
   history=[];
+  keepAwake();
   render();
 }
 
@@ -316,7 +361,6 @@ function stepIdx(from, step){
   const d = game.direction==='prev' ? -1 : 1;
   return ((from + d*step) % n + n) % n;
 }
-/* Nächster Spieler in Zugreihenfolge (immer im Uhrzeigersinn), tote überspringen */
 function nextTurnIdx(from){
   const n = game.players.length;
   for(let s=1;s<=n;s++){
@@ -325,7 +369,6 @@ function nextTurnIdx(from){
   }
   return from;
 }
-/* Angriffsziel: in gewählter Richtung, tote + (0er-Regel) geschützte (<0) überspringen */
 function attackTargetIdx(from){
   const n = game.players.length;
   for(let s=1;s<n;s++){
@@ -335,15 +378,17 @@ function attackTargetIdx(from){
     if(game.zeroRule && p.lives<0) continue;
     return i;
   }
-  return -1; // kein gültiges Ziel
+  return -1;
 }
 function livingCount(){ return game.players.filter(p=>p.alive).length; }
+function underZeroCount(){ return game.players.filter(p=>p.lives!==null && p.lives<0).length; }
 
 function submitSum(sum){
   snapshot();
   const cur = game.players[game.currentIdx];
-  if(sum<30){
-    const dmg = 30-sum;
+  const T = game.target;
+  if(sum<T){
+    const dmg = T-sum;
     cur.lives = cur.lives - dmg;
     let m = `${esc(cur.name)}: ${sum} gewürfelt → −${dmg} Leben`;
     if(!game.zeroRule){
@@ -352,15 +397,13 @@ function submitSum(sum){
     }
     game.msg = {text:m, type:'bad', hitIdx:game.currentIdx, fx:'hit'};
     endTurn();
-  } else if(sum===30){
-    game.msg = {text:`${esc(cur.name)}: genau 30 — nichts passiert.`, type:'', hitIdx:-1};
+  } else if(sum===T){
+    game.msg = {text:`${esc(cur.name)}: genau ${T} — nichts passiert.`, type:'', hitIdx:-1};
     endTurn();
   } else {
-    /* Über 30: Differenz wird GUTGESCHRIEBEN, danach Angriff */
-    const diff = sum-30;
+    const diff = sum-T;
     cur.lives += diff;
     if(game.zeroRule && cur.lives<0){
-      /* noch unter 0 → keine Angriffsphase */
       game.msg = {text:`${esc(cur.name)}: ${sum} → +${diff} Leben gutgeschrieben (noch unter 0, kein Angriff)`, type:'good', hitIdx:game.currentIdx, fx:'heal'};
       endTurn();
       return;
@@ -390,6 +433,9 @@ function submitAttack(){
     const target = game.players[targetIdx];
     target.lives = target.lives - dmg;
     let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${game.attackNum} → −${dmg} Leben`;
+    if(!game.biggestHit || dmg > game.biggestHit.dmg){
+      game.biggestHit = {attacker:cur.name, victim:target.name, dmg};
+    }
     if(!game.zeroRule){
       target.lives = Math.max(0, target.lives);
       if(target.lives===0){ target.alive=false; m += ' — ausgeschieden! 💀'; }
@@ -401,8 +447,6 @@ function submitAttack(){
   game.phase='roll';
   endTurn();
 }
-
-function underZeroCount(){ return game.players.filter(p=>p.lives<0).length; }
 
 function endTurn(){
   if(game.zeroRule && underZeroCount()>=game.zeroLimit){
@@ -416,11 +460,22 @@ function endTurn(){
     return;
   }
   game.currentIdx = nextTurnIdx(game.currentIdx);
+  game.turn++;
   game.phase='roll';
   render();
 }
 
 /* ================= Render game ================= */
+function sumGrid(clickFn, highlight=true){
+  let grid='';
+  const min = game.dice, max = game.dice*6, T = game.target;
+  for(let s=min;s<=max;s++){
+    const cls = highlight ? (s===T?'starget':(s>T?'shigh':'')) : '';
+    grid += `<button class="${cls}" onclick="${clickFn}(${s})">${s}</button>`;
+  }
+  return `<div class="sumgrid">${grid}</div>`;
+}
+
 function renderGame(){
   if(game.phase==='winner'){ renderWinner(); return; }
   if(game.phase==='ranking'){ renderRanking(); return; }
@@ -442,28 +497,19 @@ function renderGame(){
 
   let action='';
   if(isInit){
-    let grid='';
-    for(let s=6;s<=36;s++){
-      grid += `<button onclick="submitInit(${s})">${s}</button>`;
-    }
     action = `
       <div class="panel">
         <h2>Startleben: ${esc(cur.name)}</h2>
-        <div class="hint" style="margin:0 0 4px">Alle sechs Würfel auf einmal würfeln und die Summe antippen — nichts wird abgezogen.</div>
-        <div class="sumgrid">${grid}</div>
+        <div class="hint" style="margin:0 0 4px">Alle ${game.dice} Würfel auf einmal würfeln und die Summe antippen — nichts wird abgezogen.</div>
+        ${sumGrid('submitInit', false)}
       </div>`;
   } else if(game.phase==='roll'){
-    let grid='';
-    for(let s=6;s<=36;s++){
-      const cls = s===30?'s30':(s>30?'shigh':'');
-      grid += `<button class="${cls}" onclick="submitSum(${s})">${s}</button>`;
-    }
     action = `
       <div class="panel">
         <h2>${esc(cur.name)} würfelt</h2>
-        <div class="hint" style="margin:0 0 4px">Endsumme aller sechs Würfel antippen:</div>
-        <div class="sumgrid">${grid}</div>
-        <div class="hint">Über 30: Differenz wird gutgeschrieben, danach greifst du an.</div>
+        <div class="hint" style="margin:0 0 4px">Endsumme aller ${game.dice} Würfel antippen:</div>
+        ${sumGrid('submitSum')}
+        <div class="hint">Über ${game.target}: Differenz wird gutgeschrieben, danach greifst du an.</div>
       </div>`;
   } else if(game.phase==='attack'){
     const targetIdx = attackTargetIdx(game.currentIdx);
@@ -488,15 +534,15 @@ function renderGame(){
       </div>`;
   }
 
-  const dirLabel = game.direction==='next' ? 'Abzüge → nach mir' : 'Abzüge ← vor mir';
+  const dirLabel = game.direction==='next' ? 'Abzüge →' : 'Abzüge ←';
   const modeLabel = isInit
     ? `Eröffnungsrunde · Startleben würfeln`
-    : game.zeroRule
-    ? `0er-Regel · Ende bei ${game.zeroLimit} unter 0 (aktuell ${underZeroCount()})`
-    : `${livingCount()} von ${game.players.length} übrig`;
+    : (game.zeroRule
+      ? `Zug ${game.turn} · Ende bei ${game.zeroLimit} unter 0 (aktuell ${underZeroCount()})`
+      : `Zug ${game.turn} · ${livingCount()} von ${game.players.length} übrig`);
 
   app.innerHTML = `
-    <h1>30er&#8209;Spiel</h1>
+    <h1>${game.target}er&#8209;Spiel</h1>
     <div class="sub">${modeLabel} · ${dirLabel}</div>
     ${game.msg?`<div class="banner ${game.msg.type}">${game.msg.text}</div>`:''}
     ${action}
@@ -516,6 +562,12 @@ function endZeroGame(){
   }
 }
 
+function bigHitLine(){
+  if(!game.biggestHit) return '';
+  const b = game.biggestHit;
+  return `<div class="stat">💥 Grösster Schlag: ${esc(b.attacker)} → ${esc(b.victim)} (−${b.dmg})</div>`;
+}
+
 function renderRanking(){
   const sorted = [...game.players].sort((a,b)=>b.lives-a.lives);
   const rows = sorted.map((p,i)=>`
@@ -525,11 +577,12 @@ function renderRanking(){
       <span class="l ${p.lives<0?'neg':''}">${p.lives}</span>
     </div>`).join('');
   app.innerHTML = `
-    <h1>30er&#8209;Spiel</h1>
+    <h1>${game.target}er&#8209;Spiel</h1>
     <div class="panel winner">
       <div class="crown">👑</div>
       <div class="wname">${esc(sorted[0].name)}</div>
-      <p>gewinnt — ${underZeroCount()} Spieler unter 0, das Spiel ist beendet!</p>
+      <p>gewinnt nach ${game.turn} Zügen!</p>
+      ${bigHitLine()}
       ${rows}
       <div style="height:12px"></div>
       <button class="btn-primary btn-wide" onclick="rematch()">Revanche (gleiche Runde)</button>
@@ -542,11 +595,12 @@ function renderRanking(){
 function renderWinner(){
   const w = game.players.find(p=>p.alive);
   app.innerHTML = `
-    <h1>30er&#8209;Spiel</h1>
+    <h1>${game.target}er&#8209;Spiel</h1>
     <div class="panel winner">
       <div class="crown">👑</div>
       <div class="wname">${esc(w?w.name:'—')}</div>
-      <p>gewinnt mit ${w?w.lives:0} verbleibenden Leben!</p>
+      <p>gewinnt nach ${game.turn} Zügen mit ${w?w.lives:0} verbleibenden Leben!</p>
+      ${bigHitLine()}
       <button class="btn-primary btn-wide" onclick="rematch()">Revanche (gleiche Runde)</button>
       <div style="height:8px"></div>
       <button class="btn-ghost btn-wide" onclick="fullReset()">Neue Spieler</button>
@@ -555,13 +609,14 @@ function renderWinner(){
 }
 
 function rematch(){
-  /* Gleiche Spieler & Regeln, neue Eröffnungsrunde */
   game.players.forEach(p=>{ p.lives=null; p.alive=true; });
   game.phase='init';
   game.initIdx=0;
   game.currentIdx=0;
   game.attackNum=0; game.attackCount=0;
   game.msg=null;
+  game.turn=1;
+  game.biggestHit=null;
   history=[];
   render();
 }
