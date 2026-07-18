@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Das 30er-Spiel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --felt:#20402C;
+  --felt-dark:#16301F;
+  --ivory:#F8F4E6;
+  --ivory-dim:#E4DEC9;
+  --pip:#22201C;
+  --red:#C13A2B;
+  --red-dark:#9C2E22;
+  --gold:#D9A441;
+  --shadow:0 4px 14px rgba(0,0,0,.35);
+  --radius:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Nunito',sans-serif;
+  background:radial-gradient(circle at 50% 20%, var(--felt) 0%, var(--felt-dark) 100%);
+  color:var(--ivory);
+  min-height:100dvh;
+  display:flex;flex-direction:column;align-items:center;
+  padding:16px 14px 40px;
+}
+.app{width:100%;max-width:420px}
+h1{
+  font-family:'Bungee',cursive;
+  font-size:clamp(1.7rem,8vw,2.3rem);
+  text-align:center;letter-spacing:.02em;
+  color:var(--ivory);
+  text-shadow:0 3px 0 rgba(0,0,0,.4);
+  margin-bottom:2px;
+}
+.sub{text-align:center;font-size:.85rem;color:var(--ivory-dim);margin-bottom:18px;font-weight:600}
+
+/* ---------- dice face ---------- */
+.die{
+  display:inline-grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  width:44px;height:44px;background:var(--ivory);border-radius:10px;
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.15), 0 2px 5px rgba(0,0,0,.35);
+  padding:6px;gap:0;flex:none;
+}
+.die.big{width:72px;height:72px;border-radius:16px;padding:10px}
+.die .p{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.die .p::after{content:'';width:62%;aspect-ratio:1;border-radius:50%;background:var(--pip);display:none}
+.die.red .p::after{background:var(--red)}
+.die[data-v="1"] .p:nth-child(5)::after{display:block}
+.die[data-v="2"] .p:nth-child(3)::after,.die[data-v="2"] .p:nth-child(7)::after{display:block}
+.die[data-v="3"] .p:nth-child(3)::after,.die[data-v="3"] .p:nth-child(5)::after,.die[data-v="3"] .p:nth-child(7)::after{display:block}
+.die[data-v="4"] .p:nth-child(1)::after,.die[data-v="4"] .p:nth-child(3)::after,.die[data-v="4"] .p:nth-child(7)::after,.die[data-v="4"] .p:nth-child(9)::after{display:block}
+.die[data-v="5"] .p:nth-child(1)::after,.die[data-v="5"] .p:nth-child(3)::after,.die[data-v="5"] .p:nth-child(5)::after,.die[data-v="5"] .p:nth-child(7)::after,.die[data-v="5"] .p:nth-child(9)::after{display:block}
+.die[data-v="6"] .p:nth-child(1)::after,.die[data-v="6"] .p:nth-child(3)::after,.die[data-v="6"] .p:nth-child(4)::after,.die[data-v="6"] .p:nth-child(6)::after,.die[data-v="6"] .p:nth-child(7)::after,.die[data-v="6"] .p:nth-child(9)::after{display:block}
+
+/* ---------- cards / panels ---------- */
+.panel{
+  background:rgba(0,0,0,.25);
+  border:1px solid rgba(248,244,230,.12);
+  border-radius:var(--radius);
+  padding:16px;margin-bottom:14px;
+}
+.panel h2{font-size:1rem;font-weight:800;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em}
+
+label{display:block;font-size:.8rem;font-weight:700;color:var(--ivory-dim);margin-bottom:4px}
+input[type=text],input[type=number]{
+  width:100%;padding:12px;border-radius:10px;border:none;
+  font-family:inherit;font-size:1.05rem;font-weight:700;
+  background:var(--ivory);color:var(--pip);
+}
+input:focus-visible,button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+.row{display:flex;gap:10px}
+.row>*{flex:1}
+
+button{
+  font-family:'Nunito',sans-serif;font-weight:800;font-size:1rem;
+  border:none;border-radius:12px;padding:13px 16px;cursor:pointer;
+  transition:transform .08s ease, filter .1s ease;
+}
+button:active{transform:scale(.96)}
+.btn-primary{background:var(--red);color:#fff;box-shadow:inset 0 -3px 0 var(--red-dark), var(--shadow)}
+.btn-ivory{background:var(--ivory);color:var(--pip);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+.btn-ghost{background:transparent;color:var(--ivory-dim);border:2px solid rgba(248,244,230,.25)}
+.btn-wide{width:100%}
+button:disabled{opacity:.4;cursor:not-allowed}
+
+/* ---------- player list ---------- */
+.player-card{
+  display:flex;align-items:center;gap:12px;
+  background:var(--ivory);color:var(--pip);
+  border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;
+  box-shadow:var(--shadow);
+  transition:opacity .3s, transform .2s;
+  position:relative;overflow:hidden;
+}
+.player-card.current{
+  outline:3px solid var(--gold);
+  transform:scale(1.02);
+}
+.player-card.current::before{
+  content:'AM ZUG';position:absolute;top:0;right:0;
+  background:var(--gold);color:var(--pip);
+  font-size:.6rem;font-weight:800;letter-spacing:.08em;
+  padding:3px 8px;border-bottom-left-radius:8px;
+}
+.player-card.dead{opacity:.45;filter:grayscale(1)}
+.player-card .pname{flex:1;font-weight:800;font-size:1.05rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.player-card .plives{
+  font-family:'Bungee',cursive;font-size:1.5rem;line-height:1;
+  min-width:56px;text-align:right;
+}
+.player-card .plives small{font-family:'Nunito',sans-serif;font-size:.6rem;font-weight:800;display:block;color:#8a8577;letter-spacing:.05em}
+.player-card.dead .plives{font-size:1.2rem}
+.hit{animation:hitflash .5s ease}
+@keyframes hitflash{0%{background:#f3c8c2}100%{background:var(--ivory)}}
+
+/* setup list */
+.setup-item{display:flex;align-items:center;gap:10px;background:rgba(248,244,230,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.setup-item .n{flex:1;font-weight:800}
+.setup-item .l{font-family:'Bungee',cursive;color:var(--gold)}
+.setup-item .x{background:none;color:var(--ivory-dim);font-size:1.1rem;padding:4px 8px}
+
+/* ---------- sum grid ---------- */
+.sumgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:10px}
+.sumgrid button{
+  padding:11px 0;font-size:1rem;border-radius:10px;
+  background:var(--ivory);color:var(--pip);
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.15);
+}
+.sumgrid button.s30{background:var(--gold)}
+.sumgrid button.shigh{background:var(--red);color:#fff}
+
+/* stepper */
+.stepper{display:flex;align-items:center;justify-content:center;gap:16px;margin:14px 0}
+.stepper button{width:56px;height:56px;font-size:1.6rem;border-radius:50%;background:var(--ivory);color:var(--pip);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+.stepper .val{font-family:'Bungee',cursive;font-size:2.4rem;min-width:70px;text-align:center}
+
+.attack-head{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.attack-head .txt{flex:1;font-weight:700;font-size:.95rem}
+.attack-head .txt b{color:var(--gold)}
+
+.banner{
+  text-align:center;font-weight:800;font-size:1rem;
+  border-radius:10px;padding:10px;margin-bottom:12px;
+  background:rgba(248,244,230,.1);
+}
+.banner.bad{background:rgba(193,58,43,.3)}
+.banner.good{background:rgba(217,164,65,.25)}
+
+.toolbar{display:flex;gap:8px;margin-top:6px}
+.toolbar button{flex:1;font-size:.85rem;padding:10px}
+
+/* winner */
+.winner{text-align:center;padding:30px 10px}
+.winner .crown{font-size:3.5rem}
+.winner .wname{font-family:'Bungee',cursive;font-size:2rem;color:var(--gold);margin:8px 0 4px}
+.winner p{color:var(--ivory-dim);font-weight:700;margin-bottom:20px}
+
+.hint{font-size:.78rem;color:var(--ivory-dim);font-weight:600;margin-top:8px;line-height:1.4}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+
+<script>
+'use strict';
+
+/* ================= State ================= */
+let setupPlayers = [];         // [{name, lives}]
+let game = null;               // {players:[{name,lives,alive}], currentIdx, phase, attackNum, pendingMsg}
+let history = [];
+
+const $ = sel => document.querySelector(sel);
+const app = $('#app');
+
+function snapshot(){ history.push(JSON.stringify(game)); if(history.length>60) history.shift(); }
+function undo(){
+  if(!history.length) return;
+  game = JSON.parse(history.pop());
+  render();
+}
+
+function dieSVG(v, big=false, red=false){
+  let pips=''; for(let i=0;i<9;i++) pips+='<span class="p"></span>';
+  return `<span class="die${big?' big':''}${red?' red':''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
+}
+
+/* ================= Setup ================= */
+function renderSetup(){
+  const list = setupPlayers.map((p,i)=>`
+    <div class="setup-item">
+      <span class="n">${esc(p.name)}</span>
+      <span class="l">${p.lives}</span>
+      <button class="x" aria-label="${esc(p.name)} entfernen" onclick="removePlayer(${i})">✕</button>
+    </div>`).join('');
+
+  app.innerHTML = `
+    <h1>30er&#8209;Spiel</h1>
+    <div class="sub">Lebenspunkte-Tracker für den Würfeltisch</div>
+
+    <div class="panel">
+      <h2>Spieler hinzufügen</h2>
+      <div class="row" style="margin-bottom:10px">
+        <div style="flex:2">
+          <label for="pname">Name</label>
+          <input type="text" id="pname" maxlength="14" autocomplete="off" enterkeyhint="next">
+        </div>
+        <div style="flex:1">
+          <label for="plives">Leben</label>
+          <input type="number" id="plives" min="6" max="36" inputmode="numeric" placeholder="6–36">
+        </div>
+      </div>
+      <button class="btn-ivory btn-wide" onclick="addPlayer()">+ Hinzufügen</button>
+      <div class="hint">Leben = Summe aller sechs Würfel beim Startwurf. Spieler in Sitzreihenfolge (im Uhrzeigersinn) eintragen.</div>
+    </div>
+
+    ${setupPlayers.length ? `<div class="panel"><h2>Am Tisch (${setupPlayers.length})</h2>${list}</div>` : ''}
+
+    <button class="btn-primary btn-wide" onclick="startGame()" ${setupPlayers.length<2?'disabled':''}>
+      Spiel starten 🎲
+    </button>
+    ${setupPlayers.length<2?'<div class="hint" style="text-align:center">Mindestens 2 Spieler nötig.</div>':''}
+  `;
+  $('#pname').focus();
+  $('#pname').addEventListener('keydown',e=>{if(e.key==='Enter')$('#plives').focus();});
+  $('#plives').addEventListener('keydown',e=>{if(e.key==='Enter')addPlayer();});
+}
+
+function addPlayer(){
+  const name = $('#pname').value.trim();
+  const lives = parseInt($('#plives').value,10);
+  if(!name){ $('#pname').focus(); return; }
+  if(isNaN(lives)||lives<6||lives>36){ $('#plives').focus(); return; }
+  setupPlayers.push({name, lives});
+  renderSetup();
+}
+function removePlayer(i){ setupPlayers.splice(i,1); renderSetup(); }
+
+function startGame(){
+  const players = setupPlayers.map(p=>({name:p.name, lives:p.lives, alive:true}));
+  // Niedrigste Leben beginnen (bei Gleichstand: zuerst eingetragen)
+  let startIdx=0;
+  players.forEach((p,i)=>{ if(p.lives<players[startIdx].lives) startIdx=i; });
+  game = {players, currentIdx:startIdx, phase:'roll', attackNum:0, msg:null};
+  history=[];
+  render();
+}
+
+/* ================= Game logic ================= */
+function nextLivingIdx(from){
+  const n = game.players.length;
+  for(let step=1; step<=n; step++){
+    const i=(from+step)%n;
+    if(game.players[i].alive) return i;
+  }
+  return from;
+}
+function livingCount(){ return game.players.filter(p=>p.alive).length; }
+
+function submitSum(sum){
+  snapshot();
+  const cur = game.players[game.currentIdx];
+  if(sum<30){
+    const dmg = 30-sum;
+    cur.lives = Math.max(0, cur.lives-dmg);
+    let m = `${esc(cur.name)}: ${sum} gewürfelt → −${dmg} Leben`;
+    if(cur.lives===0){ cur.alive=false; m += ' — ausgeschieden! 💀'; }
+    game.msg = {text:m, type:'bad', hitIdx:game.currentIdx};
+    endTurn();
+  } else if(sum===30){
+    game.msg = {text:`${esc(cur.name)}: genau 30 — nichts passiert.`, type:'', hitIdx:-1};
+    endTurn();
+  } else {
+    game.attackNum = sum-30;
+    game.phase = 'attack';
+    game.attackCount = 0;
+    game.msg = null;
+    render();
+  }
+}
+
+function changeAttackCount(d){
+  game.attackCount = Math.max(0, (game.attackCount||0)+d);
+  $('#atkval').textContent = game.attackCount;
+  $('#atkdmg').textContent = game.attackCount * game.attackNum;
+}
+
+function submitAttack(){
+  snapshot();
+  const cur = game.players[game.currentIdx];
+  const targetIdx = nextLivingIdx(game.currentIdx);
+  const target = game.players[targetIdx];
+  const dmg = (game.attackCount||0) * game.attackNum;
+  let m;
+  if(dmg>0 && targetIdx!==game.currentIdx){
+    target.lives = Math.max(0, target.lives-dmg);
+    m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${game.attackNum} → −${dmg} Leben`;
+    if(target.lives===0){ target.alive=false; m += ' — ausgeschieden! 💀'; }
+    game.msg = {text:m, type:'bad', hitIdx:targetIdx};
+  } else {
+    game.msg = {text:`${esc(cur.name)}: keine ${game.attackNum}er — ${esc(target.name)} hat Glück.`, type:'', hitIdx:-1};
+  }
+  game.phase='roll';
+  endTurn();
+}
+
+function endTurn(){
+  if(livingCount()<=1){
+    game.phase='winner';
+    render();
+    return;
+  }
+  game.currentIdx = nextLivingIdx(game.currentIdx);
+  game.phase='roll';
+  render();
+}
+
+/* ================= Render game ================= */
+function renderGame(){
+  if(game.phase==='winner'){ renderWinner(); return; }
+
+  const cur = game.players[game.currentIdx];
+  const targetIdx = nextLivingIdx(game.currentIdx);
+
+  const cards = game.players.map((p,i)=>`
+    <div class="player-card ${i===game.currentIdx?'current':''} ${p.alive?'':'dead'} ${game.msg&&game.msg.hitIdx===i?'hit':''}">
+      <span class="pname">${p.alive?'':'💀 '}${esc(p.name)}</span>
+      <span class="plives">${p.alive?p.lives:'✕'}<small>LEBEN</small></span>
+    </div>`).join('');
+
+  let action='';
+  if(game.phase==='roll'){
+    let grid='';
+    for(let s=6;s<=36;s++){
+      const cls = s===30?'s30':(s>30?'shigh':'');
+      grid += `<button class="${cls}" onclick="submitSum(${s})">${s}</button>`;
+    }
+    action = `
+      <div class="panel">
+        <h2>${esc(cur.name)} würfelt</h2>
+        <div class="hint" style="margin:0 0 4px">Endsumme aller sechs Würfel antippen:</div>
+        <div class="sumgrid">${grid}</div>
+      </div>`;
+  } else if(game.phase==='attack'){
+    const t = game.players[targetIdx];
+    action = `
+      <div class="panel">
+        <h2>Angriff! 🎯</h2>
+        <div class="attack-head">
+          ${dieSVG(game.attackNum,true,true)}
+          <div class="txt">${esc(cur.name)} jagt <b>${game.attackNum}er</b>.<br>
+          Weiterwürfeln, solange pro Wurf mind. eine ${game.attackNum} fällt.<br>
+          Opfer: <b>${esc(t.name)}</b></div>
+        </div>
+        <label style="text-align:center">Wie viele ${game.attackNum}er liegen am Ende?</label>
+        <div class="stepper">
+          <button onclick="changeAttackCount(-1)" aria-label="weniger">−</button>
+          <span class="val" id="atkval">${game.attackCount||0}</span>
+          <button onclick="changeAttackCount(1)" aria-label="mehr">+</button>
+        </div>
+        <div class="banner">Schaden: <span id="atkdmg">${(game.attackCount||0)*game.attackNum}</span> Leben</div>
+        <button class="btn-primary btn-wide" onclick="submitAttack()">Schaden verteilen</button>
+      </div>`;
+  }
+
+  app.innerHTML = `
+    <h1>30er&#8209;Spiel</h1>
+    <div class="sub">${livingCount()} von ${game.players.length} Spielern übrig</div>
+    ${game.msg?`<div class="banner ${game.msg.type}">${game.msg.text}</div>`:''}
+    ${action}
+    <div class="panel"><h2>Am Tisch</h2>${cards}</div>
+    <div class="toolbar">
+      <button class="btn-ghost" onclick="undo()" ${history.length?'':'disabled'}>↩ Rückgängig</button>
+      <button class="btn-ghost" onclick="confirmReset()">Neues Spiel</button>
+    </div>
+  `;
+}
+
+function renderWinner(){
+  const w = game.players.find(p=>p.alive);
+  app.innerHTML = `
+    <h1>30er&#8209;Spiel</h1>
+    <div class="panel winner">
+      <div class="crown">👑</div>
+      <div class="wname">${esc(w?w.name:'—')}</div>
+      <p>gewinnt mit ${w?w.lives:0} verbleibenden Leben!</p>
+      <button class="btn-primary btn-wide" onclick="rematch()">Revanche (gleiche Runde)</button>
+      <div style="height:8px"></div>
+      <button class="btn-ghost btn-wide" onclick="fullReset()">Neue Spieler</button>
+    </div>
+  `;
+}
+
+function rematch(){
+  const names = game.players.map(p=>p.name);
+  game=null; history=[]; setupPlayers=[];
+  const rows = names.map((n,i)=>`
+    <div class="setup-item">
+      <span class="n">${esc(n)}</span>
+      <input type="number" min="6" max="36" inputmode="numeric" placeholder="6–36"
+             id="rl${i}" style="width:80px;text-align:center" aria-label="Leben für ${esc(n)}">
+    </div>`).join('');
+  app.innerHTML = `
+    <h1>30er&#8209;Spiel</h1>
+    <div class="sub">Revanche — neue Startleben würfeln</div>
+    <div class="panel">
+      <h2>Startleben eintragen</h2>
+      ${rows}
+      <div class="hint">Jeder würfelt alle sechs Würfel; die Summe sind die neuen Leben.</div>
+    </div>
+    <button class="btn-primary btn-wide" onclick='rematchStart(${JSON.stringify(names)})'>Spiel starten 🎲</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="fullReset()">Abbrechen</button>
+  `;
+  $('#rl0').focus();
+}
+function rematchStart(names){
+  for(let i=0;i<names.length;i++){
+    const v = parseInt($('#rl'+i).value,10);
+    if(isNaN(v)||v<6||v>36){ $('#rl'+i).focus(); return; }
+    setupPlayers.push({name:names[i], lives:v});
+  }
+  startGame();
+}
+function confirmReset(){
+  if(confirm('Laufendes Spiel wirklich beenden?')) fullReset();
+}
+function fullReset(){ setupPlayers=[]; game=null; history=[]; render(); }
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function render(){ game ? renderGame() : renderSetup(); }
+render();
+</script>
+</body>
+</html>
