@@ -7,7 +7,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#16301F">
+<meta name="theme-color" content="#181C26">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,13 +17,15 @@
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
-  --felt:#20402C;
-  --felt-dark:#16301F;
+  --felt:#2A3040;
+  --felt-dark:#181C26;
   --ivory:#F8F4E6;
-  --ivory-dim:#E4DEC9;
+  --ivory-dim:#D9D4C4;
   --pip:#22201C;
   --red:#C13A2B;
   --red-dark:#9C2E22;
+  --green:#3E8E5A;
+  --green-dark:#2F7048;
   --gold:#D9A441;
   --shadow:0 4px 14px rgba(0,0,0,.35);
   --radius:14px;
@@ -163,7 +165,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
   box-shadow:inset 0 -2px 0 rgba(0,0,0,.15);
 }
 .sumgrid button.starget{background:var(--gold)}
-.sumgrid button.shigh{background:var(--red);color:#fff}
+.sumgrid button.shigh{background:var(--green);color:#fff;box-shadow:inset 0 -2px 0 var(--green-dark)}
 
 /* stepper */
 .stepper{display:flex;align-items:center;justify-content:center;gap:16px;margin:14px 0}
@@ -181,6 +183,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
 }
 .banner.bad{background:rgba(193,58,43,.3)}
 .banner.good{background:rgba(120,170,80,.3)}
+.quip{display:block;margin-top:6px;font-size:1.1rem;color:var(--gold);animation:quipin .6s cubic-bezier(.2,1.6,.4,1)}
+@keyframes quipin{0%{transform:scale(.3) rotate(-6deg);opacity:0}60%{transform:scale(1.15) rotate(2deg)}100%{transform:scale(1) rotate(0);opacity:1}}
 
 .toolbar{display:flex;gap:8px;margin-top:6px}
 .toolbar button{flex:1;font-size:.85rem;padding:10px}
@@ -232,6 +236,21 @@ function undo(){
 function dieSVG(v, big=false, red=false){
   let pips=''; for(let i=0;i<9;i++) pips+='<span class="p"></span>';
   return `<span class="die${big?' big':''}${red?' red':''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
+}
+
+/* ============ Sprüche ============ */
+const QUIPS = {
+  lowRoll: ["Autsch, das tat weh! 🤕","Würfel kaputt oder was? 🎲","Selbstzerstörung aktiviert! 💣","Die Würfel hassen dich heute. 😅","Das gibt eine Runde zum Vergessen…","Hände zittern? 🫨"],
+  tinyMiss: ["Sooo knapp! 😬","Ein Auge hat gefehlt!","Fast wär's was geworden…","Zum Haareraufen! 💇"],
+  perfect: ["Punktlandung! 🎯","Zen-Meister der Würfel. 🧘","Präzision pur!","Wie mit dem Lineal gewürfelt. 📏"],
+  highRoll: ["Maschine! 🔥","Die Würfel lieben dich! ❤️","Jackpot! 💰","Wer würfelt denn SO?! 😱","Bitte sofort ins Casino. 🎰"],
+  bigAttack: ["VERNICHTUNG! 💥","Das gibt Ärger am Tisch… 😈","Brutal. Einfach brutal. ⚔️","Freundschaft beendet! 🤝❌","Gnadenlos!","Da bleibt kein Auge trocken. 😭"],
+  elimination: ["Game over! ☠️","Ab auf die Ersatzbank! 🪑","Einer weniger… 🪦","Danke fürs Mitspielen! 👋"],
+  comeback: ["Comeback des Jahres! 🚀","Zurück von den Toten! 🧟","Auferstanden! ✨","Totgesagte würfeln länger. 😤"]
+};
+function quip(kind){
+  const arr = QUIPS[kind];
+  return arr[Math.floor(Math.random()*arr.length)];
 }
 
 /* ============ Bildschirm-Wachhalten (Wake Lock) ============ */
@@ -387,31 +406,36 @@ function submitSum(sum){
   snapshot();
   const cur = game.players[game.currentIdx];
   const T = game.target;
+  const wasUnderZero = game.zeroRule && cur.lives < 0; /* Stand VOR dem Wurf zählt */
   if(sum<T){
     const dmg = T-sum;
     cur.lives = cur.lives - dmg;
     let m = `${esc(cur.name)}: ${sum} gewürfelt → −${dmg} Leben`;
+    let q = dmg >= Math.ceil(T/4) ? quip('lowRoll') : (dmg<=2 ? quip('tinyMiss') : null);
     if(!game.zeroRule){
       cur.lives = Math.max(0, cur.lives);
-      if(cur.lives===0){ cur.alive=false; m += ' — ausgeschieden! 💀'; }
+      if(cur.lives===0){ cur.alive=false; m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
     }
-    game.msg = {text:m, type:'bad', hitIdx:game.currentIdx, fx:'hit'};
+    game.msg = {text:m, type:'bad', hitIdx:game.currentIdx, fx:'hit', quip:q};
     endTurn();
   } else if(sum===T){
-    game.msg = {text:`${esc(cur.name)}: genau ${T} — nichts passiert.`, type:'', hitIdx:-1};
+    game.msg = {text:`${esc(cur.name)}: genau ${T} — nichts passiert.`, type:'', hitIdx:-1, quip:quip('perfect')};
     endTurn();
   } else {
     const diff = sum-T;
     cur.lives += diff;
-    if(game.zeroRule && cur.lives<0){
-      game.msg = {text:`${esc(cur.name)}: ${sum} → +${diff} Leben gutgeschrieben (noch unter 0, kein Angriff)`, type:'good', hitIdx:game.currentIdx, fx:'heal'};
+    if(wasUnderZero){
+      /* Wer den Zug unter 0 beginnt, darf nicht angreifen — nur Gutschrift */
+      let q = cur.lives>=0 ? quip('comeback') : null;
+      game.msg = {text:`${esc(cur.name)}: ${sum} → +${diff} Leben gutgeschrieben (unter 0 gestartet, kein Angriff)`, type:'good', hitIdx:game.currentIdx, fx:'heal', quip:q};
       endTurn();
       return;
     }
     game.attackNum = diff;
     game.attackCount = 0;
     game.phase = 'attack';
-    game.msg = {text:`+${diff} Leben gutgeschrieben für ${esc(cur.name)}!`, type:'good', hitIdx:game.currentIdx, fx:'heal'};
+    const q = diff >= game.dice ? quip('highRoll') : null;
+    game.msg = {text:`+${diff} Leben gutgeschrieben für ${esc(cur.name)}!`, type:'good', hitIdx:game.currentIdx, fx:'heal', quip:q};
     render();
   }
 }
@@ -435,14 +459,15 @@ function submitAttack(){
     const face = Math.min(game.attackNum, 6);
     const special = game.attackNum > 6 ? ` (à ${game.attackNum})` : '';
     let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${face}${special} → −${dmg} Leben`;
+    let q = dmg >= Math.ceil(game.target/3) ? quip('bigAttack') : null;
     if(!game.biggestHit || dmg > game.biggestHit.dmg){
       game.biggestHit = {attacker:cur.name, victim:target.name, dmg};
     }
     if(!game.zeroRule){
       target.lives = Math.max(0, target.lives);
-      if(target.lives===0){ target.alive=false; m += ' — ausgeschieden! 💀'; }
+      if(target.lives===0){ target.alive=false; m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
     }
-    game.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit'};
+    game.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit', quip:q};
   } else {
     game.msg = {text:`${esc(cur.name)}: keine ${Math.min(game.attackNum,6)}er gewürfelt — Glück gehabt.`, type:'', hitIdx:-1};
   }
@@ -548,7 +573,7 @@ function renderGame(){
   app.innerHTML = `
     <h1>${game.target}er&#8209;Spiel</h1>
     <div class="sub">${modeLabel} · ${dirLabel}</div>
-    ${game.msg?`<div class="banner ${game.msg.type}">${game.msg.text}</div>`:''}
+    ${game.msg?`<div class="banner ${game.msg.type}">${game.msg.text}${game.msg.quip?`<span class="quip">${game.msg.quip}</span>`:''}</div>`:''}
     ${action}
     <div class="panel"><h2>Am Tisch</h2>${cards}</div>
     <div class="toolbar">
