@@ -203,6 +203,31 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
 .hint{font-size:.78rem;color:var(--ivory-dim);font-weight:600;margin-top:8px;line-height:1.4}
 
+
+/* ---------- Logo / Navigation / Scores / Protokoll / FX ---------- */
+.brand-title{display:flex;align-items:center;justify-content:center;gap:10px}
+.brand-logo{width:48px;height:48px;border-radius:12px;box-shadow:0 3px 0 rgba(0,0,0,.35);flex:none}
+.tabs{display:flex;gap:8px;justify-content:center;margin:0 0 14px}
+.tab{flex:1;max-width:160px;background:transparent;color:var(--ivory-dim);border:2px solid rgba(248,244,230,.25);box-shadow:none;font-size:.9rem;padding:10px 12px}
+.tab.on{background:var(--gold);color:var(--pip);border-color:var(--gold)}
+.score-list{list-style:none;margin-top:6px}
+.score-list li{display:flex;align-items:center;gap:10px;background:rgba(248,244,230,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.score-list .val{font-family:'Bungee',cursive;color:var(--gold);min-width:54px}
+.score-list.shame .val{color:var(--red)}
+.score-list .who{flex:1;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.score-list .meta{font-size:.72rem;color:var(--ivory-dim);font-weight:800;white-space:nowrap}
+details.gamelog summary{cursor:pointer;font-weight:800;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.log-list{list-style:none;max-height:240px;overflow:auto}
+.log-list li{font-size:.84rem;line-height:1.4;color:var(--ivory-dim);padding:8px 0;border-bottom:1px dashed rgba(248,244,230,.12)}
+.log-list li b{color:var(--ivory)}
+.log-list li.round{color:var(--gold);font-weight:800}
+.fx-overlay{position:fixed;inset:0;z-index:99;pointer-events:none;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:20px}
+.fx-msg{font-family:'Bungee',cursive;font-size:clamp(1.25rem,6vw,2rem);line-height:1.2;text-align:center;color:var(--gold);background:rgba(24,28,38,.92);border:3px solid var(--gold);border-radius:18px;padding:16px 20px;box-shadow:var(--shadow);animation:fxPop .45s cubic-bezier(.2,1.6,.4,1) both}
+.fx-msg.bad{color:#fff;border-color:var(--red);background:rgba(156,46,34,.94)}
+.fx-p{position:absolute;font-size:2rem;animation:fxRain 2.2s ease both}
+@keyframes fxPop{from{opacity:0;transform:scale(.55) rotate(-5deg)}to{opacity:1;transform:scale(1) rotate(-1deg)}}
+@keyframes fxRain{0%{opacity:0;transform:translateY(-20vh) rotate(0)}12%{opacity:1}100%{opacity:0;transform:translateY(110vh) rotate(280deg)}}
+
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
@@ -219,12 +244,89 @@ let setupPlayers = [];
 let setupOpts = {target:30, zeroRule:false, direction:'next', zeroLimit:2};
 let game = null;
 let history = [];
+let currentView = 'play';
+const STATS_KEY = 'dreissiger-stats-v2';
+let STATS = loadStats();
 
 const $ = sel => document.querySelector(sel);
 const app = $('#app');
 const VARIANTS = [10,15,20,25,30,35,40]; // Zielwert; Würfelanzahl = Ziel/5
 
 function diceFor(t){ return t/5; }
+
+function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="30er Logo">${txt}</h1>`; }
+function loadStats(){
+  try{
+    const s = JSON.parse(localStorage.getItem(STATS_KEY));
+    if(s && typeof s==='object') return {players:s.players||{}, steals:s.steals||[], rolls:s.rolls||[]};
+  }catch(e){}
+  return {players:{}, steals:[], rolls:[]};
+}
+function saveStats(){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(STATS)); }catch(e){} }
+function statPlayer(name){
+  if(!STATS.players[name]) STATS.players[name] = {wins:0, deaths:0, games:0};
+  return STATS.players[name];
+}
+function recordGameStart(){ if(!game) return; game.players.forEach(p=>statPlayer(p.name).games++); saveStats(); }
+function recordWin(name){ statPlayer(name).wins++; saveStats(); }
+function recordDeath(name){ statPlayer(name).deaths++; saveStats(); }
+function recordBadRoll(name,sum){
+  const short = game.target - sum;
+  if(short<=0) return;
+  STATS.rolls.push({n:name, sum, T:game.target, short, dice:game.dice, d:Date.now()});
+  STATS.rolls.sort((a,b)=>b.short-a.short);
+  STATS.rolls = STATS.rolls.slice(0,10);
+  saveStats();
+}
+function recordSteal(attacker,victim,amount){
+  if(amount<=0) return;
+  STATS.steals.push({s:attacker, v:victim, a:amount, target:game.target, d:Date.now()});
+  STATS.steals.sort((a,b)=>b.a-a.a);
+  STATS.steals = STATS.steals.slice(0,10);
+  saveStats();
+}
+function addLog(html, cls){ if(game){ game.log = game.log || []; game.log.unshift({html, cls:cls||''}); if(game.log.length>80) game.log.pop(); } }
+function fmtDate(ts){ return new Date(ts).toLocaleDateString('de-CH'); }
+function logHTML(){
+  if(!game || !game.log || !game.log.length) return '';
+  return `<details class="panel gamelog" open><summary>Protokoll</summary><ul class="log-list">${game.log.map(l=>`<li class="${l.cls}">${l.html}</li>`).join('')}</ul></details>`;
+}
+function tabsHTML(){
+  return `<nav class="tabs" aria-label="Menü"><button class="tab ${currentView==='play'?'on':''}" onclick="currentView='play';render()">🎲 Spielen</button><button class="tab ${currentView==='scores'?'on':''}" onclick="currentView='scores';render()">🏆 Scores</button></nav>`;
+}
+function renderScores(){
+  const byWins = Object.entries(STATS.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
+  const byDeaths = Object.entries(STATS.players).filter(([,v])=>v.deaths>0).sort((a,b)=>b[1].deaths-a[1].deaths).slice(0,10);
+  const empty = t => `<div class="hint">${t}</div>`;
+  app.innerHTML = `
+    ${brandTitle('30er&#8209;Spiel')}
+    <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    <div class="panel"><h2>🏆 Hall of Fame</h2>
+      ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
+    </div>
+    <div class="panel"><h2>🙈 Hall of Shame</h2>
+      <div class="hint" style="margin:-4px 0 8px">Wer am häufigsten auf 0/unter 0 gefallen ist.</div>
+      ${byDeaths.length ? `<ol class="score-list shame">${byDeaths.map(([n,v])=>`<li><span class="val">${v.deaths}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Ausschiede oder Minus-Stürze registriert.')}
+    </div>
+    <div class="panel"><h2>💥 Höchste Abzüge</h2>
+      ${STATS.steals.length ? `<ol class="score-list">${STATS.steals.map(e=>`<li><span class="val">−${e.a}</span><span class="who">${esc(e.s)} → ${esc(e.v)}</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Abzüge registriert.')}
+    </div>
+    <div class="panel"><h2>🎲 Schlechteste Würfe</h2>
+      ${STATS.rolls.length ? `<ol class="score-list shame">${STATS.rolls.map(e=>`<li><span class="val">−${e.short}</span><span class="who">${esc(e.n)}: ${e.sum} gewürfelt (Ziel ${e.T})</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Würfe unter der Zielzahl gespeichert.')}
+    </div>
+    <button class="btn-ghost btn-wide" onclick="resetStats()">Statistiken zurücksetzen</button>`;
+}
+function resetStats(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS={players:{},steals:[],rolls:[]}; saveStats(); render(); } }
+function playFX(kind, text){
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('.fx-overlay').forEach(el=>el.remove());
+  const ov=document.createElement('div'); ov.className='fx-overlay';
+  const msg=document.createElement('div'); msg.className='fx-msg '+(kind==='bad'?'bad':''); msg.textContent=text; ov.appendChild(msg);
+  const emojis = kind==='bad' ? ['💥','⚡','🎲'] : ['🎲','✨','🏆'];
+  for(let i=0;i<10;i++){ const p=document.createElement('span'); p.className='fx-p'; p.textContent=emojis[Math.floor(Math.random()*emojis.length)]; p.style.left=(Math.random()*92+2)+'%'; p.style.animationDelay=(Math.random()*.5)+'s'; ov.appendChild(p); }
+  document.body.appendChild(ov); setTimeout(()=>ov.remove(),2600);
+}
+
 
 function snapshot(){ history.push(JSON.stringify(game)); if(history.length>60) history.shift(); }
 function undo(){
@@ -280,7 +382,7 @@ function renderSetup(){
   `).join('');
 
   app.innerHTML = `
-    <h1>${setupOpts.target}er&#8209;Spiel</h1>
+    ${brandTitle(`${setupOpts.target}er&#8209;Spiel`)}
     <div class="sub">Lebenspunkte-Tracker für den Würfeltisch</div>
 
     <div class="panel">
@@ -355,9 +457,12 @@ function startGame(){
     attackNum:0, attackCount:0, msg:null,
     zeroRule:setupOpts.zeroRule, direction:setupOpts.direction,
     zeroLimit, turn:1,
-    biggestHit:null /* {attacker, victim, dmg} */
+    biggestHit:null, /* {attacker, victim, dmg} */
+    log:[]
   };
   history=[];
+  recordGameStart();
+  addLog(`Spiel gestartet: ${players.map(p=>`<b>${esc(p.name)}</b>`).join(', ')} · Ziel ${setupOpts.target} · ${setupOpts.zeroRule?'0er-Regel':'Instant-Death'} · ${setupOpts.direction==='next'?'Abzug nach rechts':'Abzug nach links'}.`, 'round');
   keepAwake();
   render();
 }
@@ -365,6 +470,7 @@ function startGame(){
 function submitInit(sum){
   snapshot();
   game.players[game.initIdx].lives = sum;
+  addLog(`<b>${esc(game.players[game.initIdx].name)}</b> startet mit <b>${sum}</b> Leben.`);
   game.initIdx++;
   if(game.initIdx >= game.players.length){
     game.phase='roll';
@@ -410,20 +516,24 @@ function submitSum(sum){
   if(sum<T){
     const dmg = T-sum;
     cur.lives = cur.lives - dmg;
+    recordBadRoll(cur.name, sum);
+    addLog(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>−${dmg}</b> → Stand <b>${cur.lives}</b>.`);
     let m = `${esc(cur.name)}: ${sum} gewürfelt → −${dmg} Leben`;
     let q = dmg >= Math.ceil(T/4) ? quip('lowRoll') : (dmg<=2 ? quip('tinyMiss') : null);
     if(!game.zeroRule){
       cur.lives = Math.max(0, cur.lives);
-      if(cur.lives===0){ cur.alive=false; m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
+      if(cur.lives===0){ cur.alive=false; recordDeath(cur.name); addLog(`💀 <b>${esc(cur.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
     }
     game.msg = {text:m, type:'bad', hitIdx:game.currentIdx, fx:'hit', quip:q};
     endTurn();
   } else if(sum===T){
+    addLog(`<b>${esc(cur.name)}</b> würfelt genau <b>${T}</b> – nichts passiert.`);
     game.msg = {text:`${esc(cur.name)}: genau ${T} — nichts passiert.`, type:'', hitIdx:-1, quip:quip('perfect')};
     endTurn();
   } else {
     const diff = sum-T;
     cur.lives += diff;
+    addLog(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>+${diff}</b> → Stand <b>${cur.lives}</b>.`);
     if(wasUnderZero){
       /* Wer den Zug unter 0 beginnt, darf nicht angreifen — nur Gutschrift */
       let q = cur.lives>=0 ? quip('comeback') : null;
@@ -456,6 +566,8 @@ function submitAttack(){
   } else if(dmg>0){
     const target = game.players[targetIdx];
     target.lives = target.lives - dmg;
+    recordSteal(cur.name, target.name, dmg);
+    addLog(`<b>${esc(cur.name)}</b> trifft <b>${esc(target.name)}</b>: ${game.attackCount} × ${game.attackNum} → <b>−${dmg}</b> → Stand <b>${target.lives}</b>.`);
     const face = Math.min(game.attackNum, 6);
     const special = game.attackNum > 6 ? ` (à ${game.attackNum})` : '';
     let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${face}${special} → −${dmg} Leben`;
@@ -465,10 +577,11 @@ function submitAttack(){
     }
     if(!game.zeroRule){
       target.lives = Math.max(0, target.lives);
-      if(target.lives===0){ target.alive=false; m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
+      if(target.lives===0){ target.alive=false; recordDeath(target.name); addLog(`💀 <b>${esc(target.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
     }
     game.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit', quip:q};
   } else {
+    addLog(`<b>${esc(cur.name)}</b> trifft keine ${Math.min(game.attackNum,6)}er – kein Abzug.`);
     game.msg = {text:`${esc(cur.name)}: keine ${Math.min(game.attackNum,6)}er gewürfelt — Glück gehabt.`, type:'', hitIdx:-1};
   }
   game.phase='roll';
@@ -478,11 +591,13 @@ function submitAttack(){
 function endTurn(){
   if(game.zeroRule && underZeroCount()>=game.zeroLimit){
     game.phase='ranking';
+    if(!game.winnerRecorded){ const top=[...game.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin(top.name); addLog(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game.winnerRecorded=true; }
     render();
     return;
   }
   if(!game.zeroRule && livingCount()<=1){
     game.phase='winner';
+    if(!game.winnerRecorded){ const w=game.players.find(p=>p.alive); if(w){recordWin(w.name); addLog(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round');} game.winnerRecorded=true; }
     render();
     return;
   }
@@ -571,11 +686,12 @@ function renderGame(){
       : `Zug ${game.turn} · ${livingCount()} von ${game.players.length} übrig`);
 
   app.innerHTML = `
-    <h1>${game.target}er&#8209;Spiel</h1>
+    ${brandTitle(`${game.target}er&#8209;Spiel`)}
     <div class="sub">${modeLabel} · ${dirLabel}</div>
     ${game.msg?`<div class="banner ${game.msg.type}">${game.msg.text}${game.msg.quip?`<span class="quip">${game.msg.quip}</span>`:''}</div>`:''}
     ${action}
     <div class="panel"><h2>Am Tisch</h2>${cards}</div>
+    ${logHTML()}
     <div class="toolbar">
       <button class="btn-ghost" onclick="undo()" ${history.length?'':'disabled'}>↩ Rückgängig</button>
       ${game.zeroRule?'<button class="btn-ghost" onclick="endZeroGame()">🏁 Beenden</button>':''}
@@ -587,6 +703,7 @@ function renderGame(){
 function endZeroGame(){
   if(confirm('Spiel beenden und Rangliste anzeigen?')){
     game.phase='ranking';
+    if(!game.winnerRecorded){ const top=[...game.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin(top.name); addLog(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game.winnerRecorded=true; }
     render();
   }
 }
@@ -606,7 +723,7 @@ function renderRanking(){
       <span class="l ${p.lives<0?'neg':''}">${p.lives}</span>
     </div>`).join('');
   app.innerHTML = `
-    <h1>${game.target}er&#8209;Spiel</h1>
+    ${brandTitle(`${game.target}er&#8209;Spiel`)}
     <div class="panel winner">
       <div class="crown">👑</div>
       <div class="wname">${esc(sorted[0].name)}</div>
@@ -624,7 +741,7 @@ function renderRanking(){
 function renderWinner(){
   const w = game.players.find(p=>p.alive);
   app.innerHTML = `
-    <h1>${game.target}er&#8209;Spiel</h1>
+    ${brandTitle(`${game.target}er&#8209;Spiel`)}
     <div class="panel winner">
       <div class="crown">👑</div>
       <div class="wname">${esc(w?w.name:'—')}</div>
@@ -646,6 +763,8 @@ function rematch(){
   game.msg=null;
   game.turn=1;
   game.biggestHit=null;
+  game.winnerRecorded=false;
+  game.log=[];
   history=[];
   render();
 }
@@ -656,8 +775,9 @@ function fullReset(){ setupPlayers=[]; game=null; history=[]; render(); }
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-function render(){ game ? renderGame() : renderSetup(); }
+function render(){ if(currentView==='scores') renderScores(); else (game ? renderGame() : renderSetup()); app.insertAdjacentHTML('afterbegin', tabsHTML()); }
 render();
+if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }
 </script>
 </body>
 </html>
