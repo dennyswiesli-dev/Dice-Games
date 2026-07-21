@@ -128,9 +128,11 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .opt input[type=checkbox]{width:22px;height:22px;accent-color:var(--red);flex:none}
 .opt .txt{font-weight:700;font-size:.9rem}
 .opt .txt small{display:block;font-weight:600;color:var(--ivory-dim);font-size:.75rem;line-height:1.35}
-.seg{display:flex;border-radius:10px;overflow:hidden;border:2px solid rgba(248,244,230,.25)}
-.seg button{flex:1;border-radius:0;background:transparent;color:var(--ivory-dim);font-size:.85rem;padding:10px 6px}
-.seg button.on{background:var(--ivory);color:var(--pip)}
+.seg{display:flex;gap:8px}
+.seg button{flex:1;border-radius:10px;background:rgba(0,0,0,.15);color:var(--ivory-dim);font-size:.78rem;padding:12px 10px;text-align:left;border:2px solid rgba(248,244,230,.2);font-weight:700;line-height:1.35}
+.seg button small{display:block;font-weight:600;color:var(--ivory-dim);margin-top:3px}
+.seg button.on{background:rgba(217,164,65,.12);border-color:var(--gold);color:var(--gold)}
+.seg button.on small{color:var(--ivory-dim)}
 .variant-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:4px}
 .variant-grid button{
   padding:10px 0;border-radius:10px;background:transparent;color:var(--ivory-dim);
@@ -178,6 +180,8 @@ button:disabled{opacity:.4;cursor:not-allowed}
 .setup-item{display:flex;align-items:center;gap:10px;background:rgba(248,244,230,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px}
 .setup-item .n{flex:1;font-weight:800}
 .setup-item .x{background:none;color:var(--ivory-dim);font-size:1.1rem;padding:4px 8px}
+.setup-item .reorder{display:flex;flex-direction:column;gap:2px;flex:none}
+.setup-item .reorder button{font-size:.7rem;line-height:1;border-radius:6px}
 
 /* ---------- sum grid ---------- */
 .sumgrid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin-top:10px}
@@ -313,6 +317,19 @@ let currentView = 'play'; // play | scores (nur relevant, wenn ein Spiel aktiv i
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="Logo">${txt}</h1>`; }
 
+/* ---------- Namens-Autovervollständigung ---------- */
+function knownPlayerNames(){
+  const names = new Set();
+  try{ Object.keys((STATS30&&STATS30.players)||{}).forEach(n=>names.add(n)); }catch(e){}
+  try{ Object.keys((STATS_TUTTO&&STATS_TUTTO.players)||{}).forEach(n=>names.add(n)); }catch(e){}
+  return [...names].sort((a,b)=>a.localeCompare(b,'de'));
+}
+function nameDatalistHTML(id){
+  const names = knownPlayerNames();
+  if(!names.length) return '';
+  return `<datalist id="${id}">${names.map(n=>`<option value="${esc(n)}">`).join('')}</datalist>`;
+}
+
 function dieSVG(v, big=false, colorCls=''){
   let pips=''; for(let i=0;i<9;i++) pips+='<span class="p"></span>';
   return `<span class="die${big?' big':''}${colorCls?' '+colorCls:''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
@@ -445,9 +462,9 @@ function deletePreset30(i){
 function loadStats30(){
   try{
     const s = JSON.parse(localStorage.getItem(STATS_KEY_30));
-    if(s && typeof s==='object') return {players:s.players||{}, steals:s.steals||[], rolls:s.rolls||[]};
+    if(s && typeof s==='object') return {players:s.players||{}, steals:s.steals||[], rolls:s.rolls||[], durations:s.durations||[]};
   }catch(e){}
-  return {players:{}, steals:[], rolls:[]};
+  return {players:{}, steals:[], rolls:[], durations:[]};
 }
 function saveStats30(){ try{ localStorage.setItem(STATS_KEY_30, JSON.stringify(STATS30)); }catch(e){} }
 function statPlayer30(name){
@@ -472,6 +489,24 @@ function recordSteal30(attacker,victim,amount){
   STATS30.steals = STATS30.steals.slice(0,10);
   saveStats30();
 }
+function fmtDuration(sec){
+  if(sec==null || isNaN(sec)) return '–';
+  const m = Math.floor(sec/60), s = Math.round(sec%60);
+  if(m<=0) return `${s}s`;
+  return `${m} Min ${s}s`;
+}
+function finishGame30Duration(){
+  if(!game30 || !game30.startedAt) return;
+  const secs = Math.max(1, Math.round((Date.now()-game30.startedAt)/1000));
+  game30.durationSec = secs;
+  STATS30.durations.push(secs);
+  STATS30.durations = STATS30.durations.slice(-200);
+  saveStats30();
+}
+function avgDuration30(){
+  if(!STATS30.durations.length) return null;
+  return STATS30.durations.reduce((a,b)=>a+b,0)/STATS30.durations.length;
+}
 function addLog30(html, cls){ if(game30){ game30.log = game30.log || []; game30.log.unshift({html, cls:cls||''}); if(game30.log.length>80) game30.log.pop(); } }
 function fmtDate(ts){ return new Date(ts).toLocaleDateString('de-CH'); }
 function logHTML30(){
@@ -482,9 +517,11 @@ function renderScores30(){
   const byWins = Object.entries(STATS30.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
   const byDeaths = Object.entries(STATS30.players).filter(([,v])=>v.deaths>0).sort((a,b)=>b[1].deaths-a[1].deaths).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
+  const avgDur = avgDuration30();
   app.innerHTML = `
     ${brandTitle('30er&#8209;Spiel')}
     <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    ${avgDur ? `<div class="panel"><h2>⏱ Spieldauer</h2><div class="hint" style="margin:0">Ø ${fmtDuration(avgDur)} über ${STATS30.durations.length} beendete${STATS30.durations.length===1?'s':''} Spiel${STATS30.durations.length===1?'':'e'}.</div></div>` : ''}
     <div class="panel"><h2>🏆 Hall of Fame</h2>
       ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
     </div>
@@ -502,7 +539,7 @@ function renderScores30(){
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>`;
 }
-function resetStats30(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS30={players:{},steals:[],rolls:[]}; saveStats30(); render(); } }
+function resetStats30(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS30={players:{},steals:[],rolls:[],durations:[]}; saveStats30(); render(); } }
 
 function snapshot30(){ history30.push(JSON.stringify(game30)); if(history30.length>60) history30.shift(); }
 function undo30(){
@@ -534,6 +571,10 @@ function renderSetup30(){
       <div class="setup-item">
         <span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span>
         <span class="n">${esc(p.name)}</span>
+        <div class="reorder">
+          <button class="btn-ghost" style="padding:4px 8px" onclick="movePlayer30(${i},-1)" ${i===0?'disabled':''} aria-label="${esc(p.name)} nach oben">▲</button>
+          <button class="btn-ghost" style="padding:4px 8px" onclick="movePlayer30(${i},1)" ${i===setupPlayers30.length-1?'disabled':''} aria-label="${esc(p.name)} nach unten">▼</button>
+        </div>
         <button class="x" aria-label="${esc(p.name)} entfernen" onclick="removePlayer30(${i})">✕</button>
       </div>`).join('');
 
@@ -566,13 +607,14 @@ function renderSetup30(){
         <h2>Spieler hinzufügen</h2>
         <div style="margin-bottom:10px">
           <label for="pname30">Name</label>
-          <input type="text" id="pname30" maxlength="14" autocomplete="off" enterkeyhint="done">
+          <input type="text" id="pname30" maxlength="14" autocomplete="off" enterkeyhint="done" list="playerNamesList">
         </div>
         <button class="btn-ivory btn-wide" onclick="addPlayer30()">+ Hinzufügen</button>
-        <div class="hint">Spieler in Sitzreihenfolge eintragen — der zuerst eingetragene würfelt auch zuerst.</div>
+        <div class="hint">Spieler in Sitzreihenfolge eintragen — der zuerst eingetragene würfelt auch zuerst. Mit ▲▼ lässt sich die Reihenfolge nachträglich anpassen.</div>
       </div>
 
       ${setupPlayers30.length ? `<div class="panel"><h2>Am Tisch (${setupPlayers30.length})</h2>${list}</div>` : ''}
+      ${nameDatalistHTML('playerNamesList')}
     `;
   } else if(step===2){
     body = `
@@ -595,8 +637,8 @@ function renderSetup30(){
         ` : ''}
         <label style="margin-top:12px">Abzüge gehen an …</label>
         <div class="seg" role="group" aria-label="Angriffsrichtung">
-          <button class="${setupOpts30.direction==='next'?'on':''}" onclick="setDir30('next')">Spieler nach mir →</button>
-          <button class="${setupOpts30.direction==='prev'?'on':''}" onclick="setDir30('prev')">← Spieler vor mir</button>
+          <button class="${setupOpts30.direction==='next'?'on':''}" onclick="setDir30('next')">Nachfolgender Spieler<small>Im Uhrzeigersinn – Abzug trifft den nächsten in der Liste.</small></button>
+          <button class="${setupOpts30.direction==='prev'?'on':''}" onclick="setDir30('prev')">Vorheriger Spieler<small>Im Gegenuhrzeigersinn – Abzug trifft den vorherigen in der Liste.</small></button>
         </div>
       </div>
     `;
@@ -653,6 +695,12 @@ function addPlayer30(){
   renderSetup30();
 }
 function removePlayer30(i){ setupPlayers30.splice(i,1); renderSetup30(); }
+function movePlayer30(i, dir){
+  const j = i+dir;
+  if(j<0 || j>=setupPlayers30.length) return;
+  [setupPlayers30[i], setupPlayers30[j]] = [setupPlayers30[j], setupPlayers30[i]];
+  renderSetup30();
+}
 
 function startGame30(){
   const players = setupPlayers30.map(p=>({name:p.name, lives:null, alive:true}));
@@ -664,7 +712,8 @@ function startGame30(){
     zeroRule:setupOpts30.zeroRule, direction:setupOpts30.direction,
     zeroLimit, turn:1,
     biggestHit:null,
-    log:[]
+    log:[],
+    startedAt:Date.now()
   };
   history30=[];
   recordGameStart30();
@@ -796,13 +845,13 @@ function submitAttack30(){
 function endTurn30(){
   if(game30.zeroRule && underZeroCount30()>=game30.zeroLimit){
     game30.phase='ranking';
-    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; }
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
     return;
   }
   if(!game30.zeroRule && livingCount30()<=1){
     game30.phase='winner';
-    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; }
+    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
     return;
   }
@@ -909,7 +958,7 @@ function render30(){
 function endZeroGame30(){
   if(confirm('Spiel beenden und Rangliste anzeigen?')){
     game30.phase='ranking';
-    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; }
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
   }
 }
@@ -919,6 +968,21 @@ function bigHitLine30(){
   const b = game30.biggestHit;
   return `<div class="stat">💥 Grösster Schlag: ${esc(b.attacker)} → ${esc(b.victim)} (−${b.dmg})</div>`;
 }
+function durationLine30(){
+  if(!game30.durationSec) return '';
+  return `<div class="stat">⏱ Spieldauer: ${fmtDuration(game30.durationSec)}</div>`;
+}
+function directionPickerHTML30(){
+  return `
+    <div class="panel" style="text-align:left">
+      <h2>Richtung für die nächste Runde</h2>
+      <div class="seg" role="group" aria-label="Angriffsrichtung">
+        <button class="${game30.direction==='next'?'on':''}" onclick="setDirRematch30('next')">Nachfolgender Spieler<small>Im Uhrzeigersinn – Abzug trifft den nächsten in der Liste.</small></button>
+        <button class="${game30.direction==='prev'?'on':''}" onclick="setDirRematch30('prev')">Vorheriger Spieler<small>Im Gegenuhrzeigersinn – Abzug trifft den vorherigen in der Liste.</small></button>
+      </div>
+    </div>`;
+}
+function setDirRematch30(d){ game30.direction = d; render(); }
 
 function renderRanking30(){
   const sorted = [...game30.players].sort((a,b)=>b.lives-a.lives);
@@ -935,12 +999,13 @@ function renderRanking30(){
       <div class="wname">${esc(sorted[0].name)}</div>
       <p>gewinnt nach ${game30.turn} Zügen!</p>
       ${bigHitLine30()}
+      ${durationLine30()}
       ${rows}
-      <div style="height:12px"></div>
-      <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
-      <div style="height:8px"></div>
-      <button class="btn-ghost btn-wide" onclick="fullReset30()">Neue Spieler</button>
     </div>
+    ${directionPickerHTML30()}
+    <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="fullReset30()">Neues Spiel</button>
   `;
 }
 
@@ -953,10 +1018,12 @@ function renderWinner30(){
       <div class="wname">${esc(w?w.name:'—')}</div>
       <p>gewinnt nach ${game30.turn} Zügen mit ${w?w.lives:0} verbleibenden Leben!</p>
       ${bigHitLine30()}
-      <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
-      <div style="height:8px"></div>
-      <button class="btn-ghost btn-wide" onclick="fullReset30()">Neue Spieler</button>
+      ${durationLine30()}
     </div>
+    ${directionPickerHTML30()}
+    <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="fullReset30()">Neues Spiel</button>
   `;
 }
 
@@ -971,7 +1038,10 @@ function rematch30(){
   game30.biggestHit=null;
   game30.winnerRecorded=false;
   game30.log=[];
+  game30.startedAt=Date.now();
+  game30.durationSec=null;
   history30=[];
+  recordGameStart30();
   render();
 }
 function confirmReset30(){
@@ -1117,8 +1187,12 @@ function renderSetupTutto(){
   let body = '';
   if(step===1){
     const rows = setupPlayersTutto.map((name,i)=>`
-      <div class="row" style="margin-bottom:8px">
-        <input type="text" data-tp="${i}" value="${esc(name)}" placeholder="Spielername ${i+1}" maxlength="20" autocomplete="off">
+      <div class="row" style="margin-bottom:8px;align-items:center">
+        <input type="text" data-tp="${i}" value="${esc(name)}" placeholder="Spielername ${i+1}" maxlength="20" autocomplete="off" list="playerNamesListTutto">
+        <div class="reorder">
+          <button class="btn-ghost" style="padding:4px 8px" onclick="moveTuttoField(${i},-1)" ${i===0?'disabled':''} aria-label="Spieler nach oben">▲</button>
+          <button class="btn-ghost" style="padding:4px 8px" onclick="moveTuttoField(${i},1)" ${i===setupPlayersTutto.length-1?'disabled':''} aria-label="Spieler nach unten">▼</button>
+        </div>
         <button class="btn-ghost" style="flex:none;padding:12px 14px" onclick="removeTuttoField(${i})" ${setupPlayersTutto.length<=2?'disabled':''} aria-label="Spieler entfernen">✕</button>
       </div>`).join('');
 
@@ -1143,8 +1217,9 @@ function renderSetupTutto(){
         <button class="btn-ghost btn-wide" onclick="addTuttoField()" ${setupPlayersTutto.length>=10?'disabled':''}>+ Spieler</button>
         <label style="margin-top:14px">Zielpunktzahl</label>
         <input type="number" id="tuttoTarget" value="${window._tuttoTarget||6000}" step="500" min="500" inputmode="numeric">
-        <div class="hint">Wer nach einer abgeschlossenen Runde die Zielpunktzahl erreicht hat, gewinnt.</div>
+        <div class="hint">Wer nach einer abgeschlossenen Runde die Zielpunktzahl erreicht hat, gewinnt. Mit ▲▼ lässt sich die Reihenfolge nachträglich anpassen.</div>
       </div>
+      ${nameDatalistHTML('playerNamesListTutto')}
     `;
   } else {
     const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
@@ -1192,6 +1267,12 @@ function setupNextTutto(){
 }
 function addTuttoField(){ if(setupPlayersTutto.length<10){ setupPlayersTutto.push(''); renderSetupTutto(); } }
 function removeTuttoField(i){ if(setupPlayersTutto.length>2){ setupPlayersTutto.splice(i,1); renderSetupTutto(); } }
+function moveTuttoField(i, dir){
+  const j = i+dir;
+  if(j<0 || j>=setupPlayersTutto.length) return;
+  [setupPlayersTutto[i], setupPlayersTutto[j]] = [setupPlayersTutto[j], setupPlayersTutto[i]];
+  renderSetupTutto();
+}
 
 function startTutto(){
   const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
