@@ -298,11 +298,12 @@ tfoot td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--g
 /* ---------- Yatzy ---------- */
 .yatzy-table td.ycell{padding:4px 6px}
 .yatzy-table th.ycur{color:var(--gold)}
-.yatzy-table td.ycell input{
-  width:56px;padding:8px 4px;text-align:center;font-size:.95rem;border-radius:8px;
-  background:rgba(248,244,230,.9);color:var(--pip);font-weight:800;
+.yatzy-table td.ycell select{
+  width:64px;padding:8px 2px;text-align:center;text-align-last:center;font-size:.9rem;border-radius:8px;
+  background:rgba(248,244,230,.9);color:var(--pip);font-weight:800;border:none;
+  font-family:inherit;-webkit-appearance:none;appearance:none;
 }
-.yatzy-table td.ycell input:disabled{background:rgba(248,244,230,.12);color:var(--ivory-dim);opacity:.6}
+.yatzy-table td.ycell select:disabled{background:rgba(248,244,230,.12);color:var(--ivory-dim);opacity:.6;-webkit-appearance:none;appearance:none}
 .yatzy-table td.ycell .fixed{font-family:'Bungee',cursive;color:var(--ivory);font-size:1rem;display:inline-block;min-width:56px}
 .yatzy-table tr.ysection td{padding-top:12px;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--gold);font-weight:800;border-bottom:none}
 .yatzy-table tr.ybonus td{color:var(--gold);font-weight:800}
@@ -1495,20 +1496,21 @@ const YATZY_STATS_KEY = 'yatzy-stats-v1';
 const PRESET_KEY_YATZY = 'yatzy-presets-v1';
 
 const YATZY_CATS = [
-  {id:'ones',    label:'Einser',        hint:'Summe aller Einser',            section:'upper'},
-  {id:'twos',    label:'Zweier',        hint:'Summe aller Zweier',            section:'upper'},
-  {id:'threes',  label:'Dreier',        hint:'Summe aller Dreier',            section:'upper'},
-  {id:'fours',   label:'Vierer',        hint:'Summe aller Vierer',            section:'upper'},
-  {id:'fives',   label:'Fünfer',        hint:'Summe aller Fünfer',            section:'upper'},
-  {id:'sixes',   label:'Sechser',       hint:'Summe aller Sechser',           section:'upper'},
-  {id:'threeK',  label:'Dreierpasch',   hint:'Summe aller Würfel',            section:'lower'},
-  {id:'fourK',   label:'Viererpasch',   hint:'Summe aller Würfel',            section:'lower'},
-  {id:'fullH',   label:'Full House',    hint:'Fix 25',                        section:'lower'},
-  {id:'smallS',  label:'Kleine Straße', hint:'Fix 30',                        section:'lower'},
-  {id:'largeS',  label:'Grosse Straße', hint:'Fix 40',                        section:'lower'},
-  {id:'yatzy',   label:'Yatzy',         hint:'Fix 50',                        section:'lower'},
-  {id:'chance',  label:'Chance',        hint:'Summe aller Würfel',            section:'lower'}
+  {id:'ones',    label:'Einser',        hint:'Summe aller Einser',            section:'upper', options:()=>[0,1,2,3,4,5].map(n=>n*1)},
+  {id:'twos',    label:'Zweier',        hint:'Summe aller Zweier',            section:'upper', options:()=>[0,1,2,3,4,5].map(n=>n*2)},
+  {id:'threes',  label:'Dreier',        hint:'Summe aller Dreier',            section:'upper', options:()=>[0,1,2,3,4,5].map(n=>n*3)},
+  {id:'fours',   label:'Vierer',        hint:'Summe aller Vierer',            section:'upper', options:()=>[0,1,2,3,4,5].map(n=>n*4)},
+  {id:'fives',   label:'Fünfer',        hint:'Summe aller Fünfer',            section:'upper', options:()=>[0,1,2,3,4,5].map(n=>n*5)},
+  {id:'sixes',   label:'Sechser',       hint:'Summe aller Sechser',           section:'upper', options:()=>[0,1,2,3,4,5].map(n=>n*6)},
+  {id:'threeK',  label:'Dreierpasch',   hint:'Summe aller Würfel',            section:'lower', options:()=>[0,...range(5,30)]},
+  {id:'fourK',   label:'Viererpasch',   hint:'Summe aller Würfel',            section:'lower', options:()=>[0,...range(5,30)]},
+  {id:'fullH',   label:'Full House',    hint:'Fix 25',                        section:'lower', options:()=>[0,25]},
+  {id:'smallS',  label:'Kleine Straße', hint:'Fix 30',                        section:'lower', options:()=>[0,30]},
+  {id:'largeS',  label:'Grosse Straße', hint:'Fix 40',                        section:'lower', options:()=>[0,40]},
+  {id:'yatzy',   label:'Yatzy',         hint:'Fix 50',                        section:'lower', options:()=>[0,50]},
+  {id:'chance',  label:'Chance',        hint:'Summe aller Würfel',            section:'lower', options:()=>[0,...range(5,30)]}
 ];
+function range(a,b){ const r=[]; for(let i=a;i<=b;i++) r.push(i); return r; }
 const UPPER_BONUS_THRESHOLD = 63;
 const UPPER_BONUS_VALUE = 35;
 
@@ -1745,9 +1747,10 @@ function renderGameYatzy(){
         return `<td class="ycell"><span class="fixed">${val}</span></td>`;
       }
       if(isActivePlayer){
-        return `<td class="ycell"><input type="number" inputmode="numeric" min="0" data-ycat="${c.id}" data-yidx="${pi}" placeholder="–" onchange="submitYatzyScore('${c.id}',${pi},this.value)"></td>`;
+        const opts = c.options().map(v=>`<option value="${v}">${v===0?'0 (gestrichen)':v}</option>`).join('');
+        return `<td class="ycell"><select data-ycat="${c.id}" data-yidx="${pi}" onchange="submitYatzyScore('${c.id}',${pi},this.value)"><option value="" disabled selected>–</option>${opts}</select></td>`;
       }
-      return `<td class="ycell"><input type="number" disabled placeholder="–"></td>`;
+      return `<td class="ycell"><select disabled><option>–</option></select></td>`;
     }).join('');
     return `<tr><td><span class="ycat-name">${c.label}<small>${c.hint}</small></span></td>${cells}</tr>`;
   }
@@ -1780,7 +1783,7 @@ function renderGameYatzy(){
           <tr class="ytotal"><td>Total</td>${totalCells}</tr>
         </tbody>
       </table></div>
-      <div class="hint">Feld antippen und Punktzahl eintragen. 0 einzutragen ist erlaubt (Kategorie verstrichen). Es ist immer nur der aktuelle Spieler dran.</div>
+      <div class="hint">Feld antippen und Punktzahl aus der Liste wählen. „0 (gestrichen)" wählen, wenn die Kategorie nicht erfüllt wurde. Es ist immer nur der aktuelle Spieler dran.</div>
     </div>
 
     ${logHTMLYatzy()}
