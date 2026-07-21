@@ -4,6 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Dice-Games</title>
+<meta name="description" content="Punkte- und Lebenspunkte-Tracker für 30er-Spiel, Tutto und Yatzy — direkt im Browser, kein Konto nötig.">
+
+<!-- Open Graph / Social-Media-Vorschau -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Dice-Games">
+<meta property="og:description" content="Punkte- und Lebenspunkte-Tracker für 30er-Spiel, Tutto und Yatzy.">
+<meta property="og:image" content="og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Dice-Games">
+<meta name="twitter:description" content="Punkte- und Lebenspunkte-Tracker für 30er-Spiel, Tutto und Yatzy.">
+<meta name="twitter:image" content="og-image.png">
+
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -88,6 +102,7 @@ input[type=text],input[type=number]{
   background:var(--ivory);color:var(--pip);
 }
 input:focus-visible,button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+select:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 
 .row{display:flex;gap:10px}
 .row>*{flex:1}
@@ -311,6 +326,35 @@ tfoot td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--g
 .ycat-name{display:block}
 .ycat-name small{display:block;font-weight:600;color:var(--ivory-dim);font-size:.68rem;margin-top:1px}
 
+/* ---------- erweiterte Statistik-Ansicht ---------- */
+.stat-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.stat-tab{flex:1;min-width:90px;background:transparent;color:var(--ivory-dim);border:2px solid rgba(248,244,230,.2);font-size:.78rem;padding:9px 8px}
+.stat-tab.on{background:var(--gold);color:var(--pip);border-color:var(--gold)}
+.h2h-picker{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.h2h-picker select{width:100%;padding:12px;border-radius:10px;border:none;font-family:inherit;font-size:.95rem;font-weight:700;background:var(--ivory);color:var(--pip)}
+.h2h-vs{font-family:'Bungee',cursive;color:var(--gold);flex:none;font-size:.9rem}
+.h2h-card{background:var(--ivory);color:var(--pip);border-radius:var(--radius);padding:16px;text-align:center;box-shadow:var(--shadow)}
+.h2h-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.h2h-row:last-child{margin-bottom:0}
+.h2h-label{font-size:.72rem;font-weight:700;color:#8a8577;text-transform:uppercase;letter-spacing:.04em;flex:1;text-align:left}
+.h2h-num{font-family:'Bungee',cursive;font-size:1.3rem;min-width:44px;text-align:center}
+.h2h-num.a{color:var(--red)}
+.h2h-num.b{color:var(--blue)}
+.h2h-names{display:flex;justify-content:space-between;font-weight:800;margin-bottom:14px;font-size:.95rem}
+.combo-card{display:flex;align-items:center;gap:12px;background:rgba(248,244,230,.08);border-radius:10px;padding:12px 14px;margin-bottom:8px}
+.combo-card .cn{flex:1;font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.combo-card .cstats{display:flex;gap:14px;flex:none}
+.combo-card .cstats div{text-align:center}
+.combo-card .cstats b{display:block;font-family:'Bungee',cursive;color:var(--gold);font-size:1.1rem}
+.combo-card .cstats small{font-size:.62rem;color:var(--ivory-dim);text-transform:uppercase;letter-spacing:.04em}
+.trend-bars{display:flex;align-items:flex-end;gap:4px;height:60px;margin-top:10px}
+.trend-bars .bar-col{flex:1;background:var(--gold);border-radius:3px 3px 0 0;min-height:2px;position:relative}
+.trend-bars .bar-col.neg{background:var(--red)}
+.overview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:4px}
+.overview-grid .cell{background:rgba(248,244,230,.08);border-radius:10px;padding:12px 8px;text-align:center}
+.overview-grid .cell b{display:block;font-family:'Bungee',cursive;color:var(--gold);font-size:1.4rem}
+.overview-grid .cell small{font-size:.65rem;color:var(--ivory-dim);text-transform:uppercase;letter-spacing:.04em;display:block;margin-top:2px}
+
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
@@ -328,7 +372,7 @@ tfoot td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--g
 const $ = sel => document.querySelector(sel);
 const app = $('#app');
 
-let currentGame = null;   // null | '30er' | 'tutto'
+let currentGame = null;   // null | '30er' | 'tutto' | 'yatzy'
 let currentView = 'play'; // play | scores (nur relevant, wenn ein Spiel aktiv ist)
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -392,6 +436,8 @@ function renderGamePicker(){
         <span class="txt"><b>Yatzy</b><span>Punkteblock · 13 Kategorien, oberer Bonus, höchste Summe gewinnt</span></span>
       </button>
     </div>
+    <div style="height:6px"></div>
+    <button class="btn-ghost btn-wide" onclick="currentGame='__overview__';currentView='scores';render()">📊 Gesamtübersicht aller Spiele</button>
   `;
 }
 function chooseGame(g){
@@ -412,6 +458,7 @@ function tabsHTML(){
 }
 
 function render(){
+  if(currentGame==='__overview__'){ renderOverallStats(); return; }
   if(!currentGame){ renderGamePicker(); return; }
   if(currentGame==='30er'){
     if(currentView==='scores') renderScores30(); else render30();
@@ -546,6 +593,10 @@ function renderScores30(){
   app.innerHTML = `
     ${brandTitle('30er&#8209;Spiel')}
     <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    <div class="stat-tabs">
+      <button class="stat-tab on">📊 Übersicht</button>
+      <button class="stat-tab" onclick="showH2H30()">⚔️ Kopf-an-Kopf</button>
+    </div>
     ${avgDur ? `<div class="panel"><h2>⏱ Spieldauer</h2><div class="hint" style="margin:0">Ø ${fmtDuration(avgDur)} über ${STATS30.durations.length} beendete${STATS30.durations.length===1?'s':''} Spiel${STATS30.durations.length===1?'':'e'}.</div></div>` : ''}
     <div class="panel"><h2>🏆 Hall of Fame</h2>
       ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
@@ -563,6 +614,25 @@ function renderScores30(){
     <button class="btn-ghost btn-wide" onclick="resetStats30()">Statistiken zurücksetzen</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>`;
+}
+function showH2H30(){
+  const names = Object.keys(STATS30.players).sort((a,b)=>a.localeCompare(b,'de'));
+  renderH2HScreen({
+    title:'30er&#8209;Spiel', backFn:'renderScores30', names,
+    compute:(a,b)=>({
+      aWins: STATS30.players[a] ? STATS30.players[a].wins : 0,
+      bWins: STATS30.players[b] ? STATS30.players[b].wins : 0,
+      aGames: STATS30.players[a] ? STATS30.players[a].games : 0,
+      bGames: STATS30.players[b] ? STATS30.players[b].games : 0,
+      aDeaths: STATS30.players[a] ? STATS30.players[a].deaths : 0,
+      bDeaths: STATS30.players[b] ? STATS30.players[b].deaths : 0
+    }),
+    rows:(c)=>[
+      {label:'Siege', a:c.aWins, b:c.bWins},
+      {label:'Gespielte Spiele', a:c.aGames, b:c.bGames},
+      {label:'Ausscheiden / Minus', a:c.aDeaths, b:c.bDeaths}
+    ]
+  });
 }
 function resetStats30(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS30={players:{},steals:[],rolls:[],durations:[]}; saveStats30(); render(); } }
 
@@ -1465,6 +1535,10 @@ function renderScoresTutto(){
   app.innerHTML = `
     ${brandTitle('Tutto!')}
     <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    <div class="stat-tabs">
+      <button class="stat-tab on">📊 Übersicht</button>
+      <button class="stat-tab" onclick="showH2HTutto()">⚔️ Kopf-an-Kopf</button>
+    </div>
     <div class="panel"><h2>🏆 Hall of Fame</h2>
       ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
     </div>
@@ -1485,6 +1559,25 @@ function renderScoresTutto(){
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
   `;
+}
+function showH2HTutto(){
+  const names = Object.keys(STATS_TUTTO.players).sort((a,b)=>a.localeCompare(b,'de'));
+  renderH2HScreen({
+    title:'Tutto!', backFn:'renderScoresTutto', names,
+    compute:(a,b)=>({
+      aWins: STATS_TUTTO.players[a] ? STATS_TUTTO.players[a].wins : 0,
+      bWins: STATS_TUTTO.players[b] ? STATS_TUTTO.players[b].wins : 0,
+      aAvg: STATS_TUTTO.players[a] && STATS_TUTTO.players[a].totalRounds ? Math.round(STATS_TUTTO.players[a].totalPoints/STATS_TUTTO.players[a].totalRounds) : 0,
+      bAvg: STATS_TUTTO.players[b] && STATS_TUTTO.players[b].totalRounds ? Math.round(STATS_TUTTO.players[b].totalPoints/STATS_TUTTO.players[b].totalRounds) : 0,
+      aStreak: STATS_TUTTO.players[a] ? STATS_TUTTO.players[a].maxStreak : 0,
+      bStreak: STATS_TUTTO.players[b] ? STATS_TUTTO.players[b].maxStreak : 0
+    }),
+    rows:(c)=>[
+      {label:'Siege', a:c.aWins, b:c.bWins},
+      {label:'Ø Punkte/Runde', a:c.aAvg, b:c.bAvg},
+      {label:'Beste Serie', a:c.aStreak, b:c.bStreak}
+    ]
+  });
 }
 function resetStatsTutto(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_TUTTO={players:{}, bestRound:null, worstRound:null}; saveStatsTutto(); render(); } }
 
@@ -1915,6 +2008,10 @@ function renderScoresYatzy(){
   app.innerHTML = `
     ${brandTitle('Yatzy')}
     <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    <div class="stat-tabs">
+      <button class="stat-tab on">📊 Übersicht</button>
+      <button class="stat-tab" onclick="showH2HYatzy()">⚔️ Kopf-an-Kopf</button>
+    </div>
     ${avgDur ? `<div class="panel"><h2>⏱ Spieldauer</h2><div class="hint" style="margin:0">Ø ${fmtDuration(avgDur)} über ${STATS_YATZY.durations.length} beendete${STATS_YATZY.durations.length===1?'s':''} Spiel${STATS_YATZY.durations.length===1?'':'e'}.</div></div>` : ''}
     <div class="panel"><h2>🏆 Hall of Fame</h2>
       ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
@@ -1930,7 +2027,155 @@ function renderScoresYatzy(){
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
   `;
 }
+function showH2HYatzy(){
+  const names = Object.keys(STATS_YATZY.players).sort((a,b)=>a.localeCompare(b,'de'));
+  renderH2HScreen({
+    title:'Yatzy', backFn:'renderScoresYatzy', names,
+    compute:(a,b)=>({
+      aWins: STATS_YATZY.players[a] ? STATS_YATZY.players[a].wins : 0,
+      bWins: STATS_YATZY.players[b] ? STATS_YATZY.players[b].wins : 0,
+      aYatzy: STATS_YATZY.players[a] ? STATS_YATZY.players[a].yatzyCount : 0,
+      bYatzy: STATS_YATZY.players[b] ? STATS_YATZY.players[b].yatzyCount : 0,
+      aGames: STATS_YATZY.players[a] ? STATS_YATZY.players[a].games : 0,
+      bGames: STATS_YATZY.players[b] ? STATS_YATZY.players[b].games : 0
+    }),
+    rows:(c)=>[
+      {label:'Siege', a:c.aWins, b:c.bWins},
+      {label:'Yatzys gewürfelt', a:c.aYatzy, b:c.bYatzy},
+      {label:'Gespielte Spiele', a:c.aGames, b:c.bGames}
+    ]
+  });
+}
 function resetStatsYatzy(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_YATZY={players:{}, bestGame:null, durations:[]}; saveStatsYatzy(); render(); } }
+
+/* ============================================================
+   ERWEITERTE STATISTIK-ANSICHT: Kopf-an-Kopf & Gesamtübersicht
+   ============================================================ */
+let h2hState = {a:null, b:null};
+
+/**
+ * Generischer Kopf-an-Kopf-Bildschirm für ein einzelnes Spiel.
+ * opts = {title, backFn (Funktionsname als String), names, compute(a,b)=>obj, rows(computed)=>[{label,a,b}]}
+ */
+function renderH2HScreen(opts){
+  const { title, backFn, names } = opts;
+  if(names.length<2){
+    app.innerHTML = `
+      ${brandTitle(title)}
+      <div class="stat-tabs">
+        <button class="stat-tab" onclick="${backFn}()">📊 Übersicht</button>
+        <button class="stat-tab on">⚔️ Kopf-an-Kopf</button>
+      </div>
+      <div class="panel"><div class="hint" style="margin:0">Mindestens zwei Spieler mit gespeicherten Statistiken nötig, um sie zu vergleichen.</div></div>
+      <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+    `;
+    return;
+  }
+  if(!h2hState.a || !names.includes(h2hState.a)) h2hState.a = names[0];
+  if(!h2hState.b || !names.includes(h2hState.b) || h2hState.b===h2hState.a) h2hState.b = names.find(n=>n!==h2hState.a) || names[1];
+
+  const optionsA = names.map(n=>`<option value="${esc(n)}" ${n===h2hState.a?'selected':''}>${esc(n)}</option>`).join('');
+  const optionsB = names.map(n=>`<option value="${esc(n)}" ${n===h2hState.b?'selected':''}>${esc(n)}</option>`).join('');
+
+  const c = opts.compute(h2hState.a, h2hState.b);
+  const rows = opts.rows(c);
+
+  app.innerHTML = `
+    ${brandTitle(title)}
+    <div class="stat-tabs">
+      <button class="stat-tab" onclick="${backFn}()">📊 Übersicht</button>
+      <button class="stat-tab on">⚔️ Kopf-an-Kopf</button>
+    </div>
+    <div class="panel">
+      <h2>Spieler wählen</h2>
+      <div class="h2h-picker">
+        <select id="h2hSelA" onchange="h2hState.a=this.value; ${backFn.replace('renderScores','showH2H')}()">${optionsA}</select>
+        <span class="h2h-vs">VS</span>
+        <select id="h2hSelB" onchange="h2hState.b=this.value; ${backFn.replace('renderScores','showH2H')}()">${optionsB}</select>
+      </div>
+      <div class="h2h-card">
+        <div class="h2h-names"><span style="color:var(--red)">${esc(h2hState.a)}</span><span style="color:var(--blue)">${esc(h2hState.b)}</span></div>
+        ${rows.map(r=>`
+          <div class="h2h-row">
+            <span class="h2h-num a">${r.a}</span>
+            <span class="h2h-label">${esc(r.label)}</span>
+            <span class="h2h-num b">${r.b}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+}
+
+/**
+ * Gesamtübersicht über alle drei Spiele hinweg: gemeinsame Spielerliste,
+ * Gesamtsiege, Gesamtspiele, meistgespieltes Spiel.
+ */
+function renderOverallStats(){
+  const allNames = new Set();
+  Object.keys(STATS30.players).forEach(n=>allNames.add(n));
+  Object.keys(STATS_TUTTO.players).forEach(n=>allNames.add(n));
+  Object.keys(STATS_YATZY.players).forEach(n=>allNames.add(n));
+
+  const totalGames30 = Object.values(STATS30.players).reduce((s,p)=>s+p.games,0);
+  const totalGamesTutto = Object.values(STATS_TUTTO.players).reduce((s,p)=>s+p.games,0);
+  const totalGamesYatzy = Object.values(STATS_YATZY.players).reduce((s,p)=>s+p.games,0);
+  // Spiele-Zähler ist pro Spieler inkrementiert, für Gesamtzahl der Partien durch Spieleranzahl grob normalisieren nicht nötig — wir zeigen Teilnahmen, nicht Partien
+  const totalWins = [...allNames].reduce((s,n)=>{
+    return s + (STATS30.players[n]?STATS30.players[n].wins:0)
+             + (STATS_TUTTO.players[n]?STATS_TUTTO.players[n].wins:0)
+             + (STATS_YATZY.players[n]?STATS_YATZY.players[n].wins:0);
+  },0);
+
+  const combined = [...allNames].map(n=>{
+    const w30 = STATS30.players[n]?STATS30.players[n].wins:0;
+    const wT = STATS_TUTTO.players[n]?STATS_TUTTO.players[n].wins:0;
+    const wY = STATS_YATZY.players[n]?STATS_YATZY.players[n].wins:0;
+    const g30 = STATS30.players[n]?STATS30.players[n].games:0;
+    const gT = STATS_TUTTO.players[n]?STATS_TUTTO.players[n].games:0;
+    const gY = STATS_YATZY.players[n]?STATS_YATZY.players[n].games:0;
+    return {name:n, wins:w30+wT+wY, games:g30+gT+gY, w30, wT, wY, g30, gT, gY};
+  }).sort((a,b)=>b.wins-a.wins);
+
+  const empty = t => `<div class="hint">${t}</div>`;
+
+  app.innerHTML = `
+    ${brandTitle('Dice-Games')}
+    <div class="sub">Gesamtübersicht über alle drei Spiele</div>
+
+    <div class="overview-grid">
+      <div class="cell"><b>${allNames.size}</b><small>Spieler</small></div>
+      <div class="cell"><b>${totalWins}</b><small>Siege gesamt</small></div>
+      <div class="cell"><b>${totalGames30+totalGamesTutto+totalGamesYatzy}</b><small>Teilnahmen</small></div>
+    </div>
+
+    <div class="panel">
+      <h2>🏆 Bestenliste über alle Spiele</h2>
+      ${combined.length ? `<ol class="score-list">${combined.slice(0,10).map(c=>`
+        <li>
+          <span class="val">${c.wins}×</span>
+          <span class="who">${esc(c.name)}</span>
+          <span class="meta">${c.games} Teilnahmen</span>
+        </li>`).join('')}</ol>` : empty('Noch keine Statistiken vorhanden — spielt eine Runde!')}
+    </div>
+
+    ${combined.length ? `
+    <div class="panel">
+      <h2>Aufschlüsselung pro Spiel</h2>
+      ${combined.slice(0,8).map(c=>`
+        <div class="combo-card">
+          <div class="cn">${esc(c.name)}</div>
+          <div class="cstats">
+            <div><b>${c.w30}</b><small>30er</small></div>
+            <div><b>${c.wT}</b><small>Tutto</small></div>
+            <div><b>${c.wY}</b><small>Yatzy</small></div>
+          </div>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+}
 
 /* ============================================================
    START
