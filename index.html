@@ -1001,15 +1001,52 @@ loadTutto();
 function loadStatsTutto(){
   try{
     const s = JSON.parse(localStorage.getItem(TUTTO_STATS_KEY));
-    if(s && typeof s==='object') return {players:s.players||{}};
+    if(s && typeof s==='object') return {
+      players:s.players||{},
+      bestRound: s.bestRound || null,   // {name, value, d}
+      worstRound: s.worstRound || null  // {name, value, d}
+    };
   }catch(e){}
-  return {players:{}};
+  return {players:{}, bestRound:null, worstRound:null};
 }
 let STATS_TUTTO = loadStatsTutto();
 function saveStatsTutto(){ try{ localStorage.setItem(TUTTO_STATS_KEY, JSON.stringify(STATS_TUTTO)); }catch(e){} }
 function statPlayerTutto(name){
-  if(!STATS_TUTTO.players[name]) STATS_TUTTO.players[name] = {wins:0, games:0};
-  return STATS_TUTTO.players[name];
+  if(!STATS_TUTTO.players[name]) STATS_TUTTO.players[name] = {wins:0, games:0, streak:0, maxStreak:0, totalPoints:0, totalRounds:0};
+  const p = STATS_TUTTO.players[name];
+  // Rückwärtskompatibel: fehlende Felder ergänzen, falls aus älterer Version geladen
+  if(p.streak===undefined) p.streak=0;
+  if(p.maxStreak===undefined) p.maxStreak=0;
+  if(p.totalPoints===undefined) p.totalPoints=0;
+  if(p.totalRounds===undefined) p.totalRounds=0;
+  return p;
+}
+function recordRoundTutto(round, playerNames){
+  round.forEach((v,i)=>{
+    const name = playerNames[i];
+    const sp = statPlayerTutto(name);
+    sp.totalPoints += v;
+    sp.totalRounds += 1;
+    if(!STATS_TUTTO.bestRound || v > STATS_TUTTO.bestRound.value){
+      STATS_TUTTO.bestRound = {name, value:v, d:Date.now()};
+    }
+    if(!STATS_TUTTO.worstRound || v < STATS_TUTTO.worstRound.value){
+      STATS_TUTTO.worstRound = {name, value:v, d:Date.now()};
+    }
+  });
+  saveStatsTutto();
+}
+function recordWinStreakTutto(winnerName, allNames){
+  allNames.forEach(name=>{
+    const sp = statPlayerTutto(name);
+    if(name===winnerName){
+      sp.streak += 1;
+      if(sp.streak > sp.maxStreak) sp.maxStreak = sp.streak;
+    } else {
+      sp.streak = 0;
+    }
+  });
+  saveStatsTutto();
 }
 
 function fmtNum(n){ return n.toLocaleString('de-CH'); }
@@ -1019,39 +1056,139 @@ function totalsTutto(){
   return t;
 }
 
-/* ---------- Setup ---------- */
+/* ---------- Presets (Vorlagen) ---------- */
+const PRESET_KEY_TUTTO = 'tutto-presets-v1';
+function loadPresetsTutto(){
+  try{
+    const p = JSON.parse(localStorage.getItem(PRESET_KEY_TUTTO));
+    if(Array.isArray(p)) return p;
+  }catch(e){}
+  return [];
+}
+let PRESETS_TUTTO = loadPresetsTutto();
+function savePresetsTutto(){ try{ localStorage.setItem(PRESET_KEY_TUTTO, JSON.stringify(PRESETS_TUTTO)); }catch(e){} }
+
+function saveCurrentPresetTutto(){
+  const nameInput = $('#presetNameInputTutto');
+  const name = (nameInput && nameInput.value || '').trim();
+  if(!name){ if(nameInput) nameInput.focus(); return; }
+  const preset = {
+    name,
+    players: setupPlayersTutto.filter(n=>n.trim()),
+    target: window._tuttoTarget || 6000,
+    d: Date.now()
+  };
+  const idx = PRESETS_TUTTO.findIndex(v=>v.name.toLowerCase()===name.toLowerCase());
+  if(idx>=0) PRESETS_TUTTO[idx]=preset; else PRESETS_TUTTO.push(preset);
+  PRESETS_TUTTO = PRESETS_TUTTO.slice(0,12);
+  savePresetsTutto();
+  renderSetupTutto();
+}
+function loadPresetTutto(i){
+  const v = PRESETS_TUTTO[i];
+  if(!v) return;
+  setupPlayersTutto = v.players.slice();
+  while(setupPlayersTutto.length<2) setupPlayersTutto.push('');
+  window._tuttoTarget = v.target;
+  setupStepTutto = 2;
+  renderSetupTutto();
+}
+function deletePresetTutto(i){
+  const v = PRESETS_TUTTO[i];
+  if(v && confirm(`Vorlage "${v.name}" löschen?`)){
+    PRESETS_TUTTO.splice(i,1);
+    savePresetsTutto();
+    renderSetupTutto();
+  }
+}
+
+/* ---------- Setup-Wizard (2 Schritte) ---------- */
 let setupPlayersTutto = ['',''];
+let setupStepTutto = 1;
 function renderTutto(){
   if(!gameTutto){ renderSetupTutto(); return; }
   renderGameTutto();
 }
 
 function renderSetupTutto(){
-  const rows = setupPlayersTutto.map((name,i)=>`
-    <div class="row" style="margin-bottom:8px">
-      <input type="text" data-tp="${i}" value="${esc(name)}" placeholder="Spielername ${i+1}" maxlength="20" autocomplete="off">
-      <button class="btn-ghost" style="flex:none;padding:12px 14px" onclick="removeTuttoField(${i})" ${setupPlayersTutto.length<=2?'disabled':''} aria-label="Spieler entfernen">✕</button>
-    </div>`).join('');
+  const step = setupStepTutto;
+  const titles = {1:'Spieler & Ziel', 2:'Übersicht & Vorlagen'};
+
+  let body = '';
+  if(step===1){
+    const rows = setupPlayersTutto.map((name,i)=>`
+      <div class="row" style="margin-bottom:8px">
+        <input type="text" data-tp="${i}" value="${esc(name)}" placeholder="Spielername ${i+1}" maxlength="20" autocomplete="off">
+        <button class="btn-ghost" style="flex:none;padding:12px 14px" onclick="removeTuttoField(${i})" ${setupPlayersTutto.length<=2?'disabled':''} aria-label="Spieler entfernen">✕</button>
+      </div>`).join('');
+
+    const presetList = PRESETS_TUTTO.length ? `
+      <div class="panel">
+        <h2>Vorlage laden</h2>
+        ${PRESETS_TUTTO.map((v,i)=>`
+          <div class="preset-item">
+            <div class="pn"><b>${esc(v.name)}</b><small>${v.players.map(esc).join(', ')} · Ziel ${fmtNum(v.target)}</small></div>
+            <div class="pbtns">
+              <button class="btn-ivory" onclick="loadPresetTutto(${i})">Laden</button>
+              <button class="btn-ghost" onclick="deletePresetTutto(${i})" aria-label="Vorlage löschen">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>` : '';
+
+    body = `
+      ${presetList}
+      <div class="panel">
+        <h2>Neues Spiel</h2>
+        ${rows}
+        <button class="btn-ghost btn-wide" onclick="addTuttoField()" ${setupPlayersTutto.length>=10?'disabled':''}>+ Spieler</button>
+        <label style="margin-top:14px">Zielpunktzahl</label>
+        <input type="number" id="tuttoTarget" value="${window._tuttoTarget||6000}" step="500" min="500" inputmode="numeric">
+        <div class="hint">Wer nach einer abgeschlossenen Runde die Zielpunktzahl erreicht hat, gewinnt.</div>
+      </div>
+    `;
+  } else {
+    const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
+    body = `
+      <div class="panel">
+        <h2>Übersicht</h2>
+        <div class="hint" style="margin:0 0 10px">Ziel: ${fmtNum(window._tuttoTarget||6000)} Punkte</div>
+        ${names.map((n,i)=>`<div class="setup-item"><span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span><span class="n">${esc(n)}</span></div>`).join('')}
+      </div>
+      <div class="panel">
+        <h2>Als Vorlage speichern</h2>
+        <div class="hint" style="margin:0 0 10px">Speichert Spieler und Zielpunktzahl unter einem Namen — praktisch für den nächsten Spieleabend.</div>
+        <div class="row">
+          <input type="text" id="presetNameInputTutto" maxlength="24" placeholder="z. B. Stammtisch" autocomplete="off">
+          <button class="btn-ivory" onclick="saveCurrentPresetTutto()" style="flex:none">Speichern</button>
+        </div>
+      </div>
+    `;
+  }
 
   app.innerHTML = `
     ${brandTitle('Tutto!')}
     <div class="sub">Punktetafel für den Würfeltisch</div>
-    <div class="panel">
-      <h2>Neues Spiel</h2>
-      ${rows}
-      <button class="btn-ghost btn-wide" onclick="addTuttoField()" ${setupPlayersTutto.length>=10?'disabled':''}>+ Spieler</button>
-      <label style="margin-top:14px">Zielpunktzahl</label>
-      <input type="number" id="tuttoTarget" value="${window._tuttoTarget||6000}" step="500" min="500" inputmode="numeric">
-      <div class="hint">Wer nach einer abgeschlossenen Runde die Zielpunktzahl erreicht hat, gewinnt.</div>
+    <div class="stepbar">Schritt <b>${step}</b> von 2 · ${titles[step]}</div>
+    ${body}
+    <div class="wizard-nav">
+      ${step>1 ? `<button class="btn-ghost" onclick="setupStepTutto--;renderSetupTutto()">← Zurück</button>` : `<button class="btn-ghost" onclick="backToPicker()">← Spielauswahl</button>`}
+      ${step<2
+        ? `<button class="btn-primary" onclick="setupNextTutto()">Weiter →</button>`
+        : `<button class="btn-primary" onclick="startTutto()">Los geht's 🎲</button>`}
     </div>
-    <button class="btn-primary btn-wide" onclick="startTutto()">Los geht's 🎲</button>
-    <div style="height:8px"></div>
-    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
   `;
-  app.querySelectorAll('[data-tp]').forEach(inp=>{
-    inp.addEventListener('input', e=>{ setupPlayersTutto[+e.target.dataset.tp] = e.target.value; });
-  });
-  $('#tuttoTarget').addEventListener('input', e=>{ window._tuttoTarget = parseInt(e.target.value,10)||6000; });
+  if(step===1){
+    app.querySelectorAll('[data-tp]').forEach(inp=>{
+      inp.addEventListener('input', e=>{ setupPlayersTutto[+e.target.dataset.tp] = e.target.value; });
+    });
+    $('#tuttoTarget').addEventListener('input', e=>{ window._tuttoTarget = parseInt(e.target.value,10)||6000; });
+  }
+}
+function setupNextTutto(){
+  const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
+  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  setupStepTutto++;
+  renderSetupTutto();
 }
 function addTuttoField(){ if(setupPlayersTutto.length<10){ setupPlayersTutto.push(''); renderSetupTutto(); } }
 function removeTuttoField(i){ if(setupPlayersTutto.length>2){ setupPlayersTutto.splice(i,1); renderSetupTutto(); } }
@@ -1059,7 +1196,7 @@ function removeTuttoField(i){ if(setupPlayersTutto.length>2){ setupPlayersTutto.
 function startTutto(){
   const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
   if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
-  let target = parseInt(($('#tuttoTarget')||{}).value, 10);
+  let target = window._tuttoTarget || parseInt((($('#tuttoTarget')||{}).value), 10);
   if(!target || target<500) target = 6000;
   gameTutto = {players:names, target, rounds:[], finished:false};
   names.forEach(n=>statPlayerTutto(n).games++);
@@ -1156,6 +1293,7 @@ function commitRoundTutto(){
   });
   if(!any){ alert('Keine Punkte eingetragen.'); return; }
   gameTutto.rounds.push(round);
+  recordRoundTutto(round, gameTutto.players);
   saveTutto();
   render();
   checkWinTutto(true);
@@ -1176,6 +1314,7 @@ function resetTutto(){
   localStorage.removeItem(TUTTO_KEY);
   setupPlayersTutto = old ? old.players.slice() : ['',''];
   window._tuttoTarget = old ? old.target : 6000;
+  setupStepTutto = 1;
   render();
 }
 function checkWinTutto(announce){
@@ -1186,6 +1325,7 @@ function checkWinTutto(announce){
   if(announce || !gameTutto.finished){
     gameTutto.finished = true;
     statPlayerTutto(gameTutto.players[bi]).wins++;
+    recordWinStreakTutto(gameTutto.players[bi], gameTutto.players);
     saveStatsTutto();
     saveTutto();
     renderWinnerTutto(gameTutto.players[bi], best);
@@ -1210,6 +1350,11 @@ function renderWinnerTutto(name, score){
 
 function renderScoresTutto(){
   const byWins = Object.entries(STATS_TUTTO.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
+  const byAvg = Object.entries(STATS_TUTTO.players)
+    .filter(([,v])=>v.totalRounds>0)
+    .map(([n,v])=>[n, v, v.totalPoints/v.totalRounds])
+    .sort((a,b)=>b[2]-a[2]).slice(0,10);
+  const byStreak = Object.entries(STATS_TUTTO.players).filter(([,v])=>v.maxStreak>0).sort((a,b)=>b[1].maxStreak-a[1].maxStreak).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
   app.innerHTML = `
     ${brandTitle('Tutto!')}
@@ -1217,12 +1362,25 @@ function renderScoresTutto(){
     <div class="panel"><h2>🏆 Hall of Fame</h2>
       ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
     </div>
+    <div class="panel"><h2>🔥 Beste Siegesserie</h2>
+      <div class="hint" style="margin:-4px 0 8px">Wie viele Spiele in Folge jemand am Stück gewonnen hat.</div>
+      ${byStreak.length ? `<ol class="score-list">${byStreak.map(([n,v])=>`<li><span class="val">${v.maxStreak}×</span><span class="who">${esc(n)}</span><span class="meta">${v.streak>1?`aktuell ${v.streak}× in Folge`:''}</span></li>`).join('')}</ol>` : empty('Noch keine Serie erfasst.')}
+    </div>
+    <div class="panel"><h2>📈 Beste Ø-Punkte pro Runde</h2>
+      ${byAvg.length ? `<ol class="score-list">${byAvg.map(([n,v,avg])=>`<li><span class="val">${Math.round(avg)}</span><span class="who">${esc(n)}</span><span class="meta">${v.totalRounds} Runden</span></li>`).join('')}</ol>` : empty('Noch keine Runden gespielt.')}
+    </div>
+    <div class="panel"><h2>🚀 Höchste Rundenpunktzahl</h2>
+      ${STATS_TUTTO.bestRound ? `<div class="score-list"><div class="standing"><span class="pos">🥇</span><span class="name">${esc(STATS_TUTTO.bestRound.name)}</span><span class="pts" style="color:var(--pip)">${fmtNum(STATS_TUTTO.bestRound.value)}</span></div></div><div class="hint" style="margin-top:4px">${fmtDate(STATS_TUTTO.bestRound.d)}</div>` : empty('Noch keine Runde erfasst.')}
+    </div>
+    <div class="panel"><h2>🙈 Niedrigste Rundenpunktzahl</h2>
+      ${STATS_TUTTO.worstRound ? `<div class="score-list"><div class="standing"><span class="pos">💩</span><span class="name">${esc(STATS_TUTTO.worstRound.name)}</span><span class="pts" style="color:#e8837a">${fmtNum(STATS_TUTTO.worstRound.value)}</span></div></div><div class="hint" style="margin-top:4px">${fmtDate(STATS_TUTTO.worstRound.d)}</div>` : empty('Noch keine Runde erfasst.')}
+    </div>
     <button class="btn-ghost btn-wide" onclick="resetStatsTutto()">Statistiken zurücksetzen</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
   `;
 }
-function resetStatsTutto(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_TUTTO={players:{}}; saveStatsTutto(); render(); } }
+function resetStatsTutto(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_TUTTO={players:{}, bestRound:null, worstRound:null}; saveStatsTutto(); render(); } }
 
 /* ============================================================
    START
