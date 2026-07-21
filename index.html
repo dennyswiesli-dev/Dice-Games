@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>30er-Spiel</title>
+<title>Würfeltafel</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -11,7 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="30er">
+<meta name="apple-mobile-web-app-title" content="Würfeltafel">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bungee&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -27,6 +27,7 @@
   --green:#3E8E5A;
   --green-dark:#2F7048;
   --gold:#D9A441;
+  --blue:#6E9BB8;
   --shadow:0 4px 14px rgba(0,0,0,.35);
   --radius:14px;
 }
@@ -59,9 +60,11 @@ h1{
   padding:6px;gap:0;flex:none;
 }
 .die.big{width:72px;height:72px;border-radius:16px;padding:10px}
+.die.small{width:30px;height:30px;padding:4px;border-radius:7px}
 .die .p{width:100%;height:100%;display:flex;align-items:center;justify-content:center}
 .die .p::after{content:'';width:62%;aspect-ratio:1;border-radius:50%;background:var(--pip);display:none}
 .die.red .p::after{background:var(--red)}
+.die.gold .p::after{background:var(--gold)}
 .die[data-v="1"] .p:nth-child(5)::after{display:block}
 .die[data-v="2"] .p:nth-child(3)::after,.die[data-v="2"] .p:nth-child(7)::after{display:block}
 .die[data-v="3"] .p:nth-child(3)::after,.die[data-v="3"] .p:nth-child(5)::after,.die[data-v="3"] .p:nth-child(7)::after{display:block}
@@ -100,6 +103,25 @@ button:active{transform:scale(.96)}
 .btn-ghost{background:transparent;color:var(--ivory-dim);border:2px solid rgba(248,244,230,.25)}
 .btn-wide{width:100%}
 button:disabled{opacity:.4;cursor:not-allowed}
+
+/* ---------- game-select screen ---------- */
+.gamepick{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+.gamepick .pick-btn{
+  display:flex;align-items:center;gap:14px;
+  padding:18px 18px;border-radius:18px;text-align:left;
+  border:2px solid rgba(248,244,230,.15);
+  background:rgba(0,0,0,.22);color:var(--ivory);
+  box-shadow:var(--shadow);
+}
+.gamepick .pick-btn .icon{
+  width:52px;height:52px;border-radius:14px;flex:none;
+  display:flex;align-items:center;justify-content:center;font-size:1.6rem;
+}
+.gamepick .pick-btn.p30 .icon{background:var(--gold);color:var(--pip)}
+.gamepick .pick-btn.ptutto .icon{background:var(--blue);color:var(--pip)}
+.gamepick .pick-btn .txt{flex:1;min-width:0}
+.gamepick .pick-btn .txt b{font-family:'Bungee',cursive;font-size:1.15rem;display:block;margin-bottom:3px;letter-spacing:.02em}
+.gamepick .pick-btn .txt span{font-size:.82rem;color:var(--ivory-dim);font-weight:600;line-height:1.4;display:block}
 
 /* ---------- options ---------- */
 .opt{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -203,7 +225,6 @@ button:disabled{opacity:.4;cursor:not-allowed}
 
 .hint{font-size:.78rem;color:var(--ivory-dim);font-weight:600;margin-top:8px;line-height:1.4}
 
-
 /* ---------- Logo / Navigation / Scores / Protokoll / FX ---------- */
 .brand-title{display:flex;align-items:center;justify-content:center;gap:10px}
 .brand-logo{width:48px;height:48px;border-radius:12px;box-shadow:0 3px 0 rgba(0,0,0,.35);flex:none}
@@ -228,6 +249,47 @@ details.gamelog summary{cursor:pointer;font-weight:800;text-transform:uppercase;
 @keyframes fxPop{from{opacity:0;transform:scale(.55) rotate(-5deg)}to{opacity:1;transform:scale(1) rotate(-1deg)}}
 @keyframes fxRain{0%{opacity:0;transform:translateY(-20vh) rotate(0)}12%{opacity:1}100%{opacity:0;transform:translateY(110vh) rotate(280deg)}}
 
+/* ---------- wizard step indicator ---------- */
+.stepbar{text-align:center;font-size:.8rem;font-weight:800;color:var(--ivory-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+.stepbar b{color:var(--gold)}
+.wizard-nav{display:flex;gap:10px;justify-content:space-between;margin-top:4px}
+.wizard-nav button{flex:1}
+
+/* ---------- presets ---------- */
+.preset-item{display:flex;align-items:center;gap:10px;background:rgba(248,244,230,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+.preset-item .pn{flex:1;min-width:0}
+.preset-item .pn b{display:block;font-size:.92rem}
+.preset-item .pn small{display:block;color:var(--ivory-dim);font-size:.72rem;margin-top:2px;line-height:1.3}
+.preset-item .pbtns{display:flex;gap:6px;flex:none}
+.preset-item .pbtns button{padding:8px 10px;font-size:.8rem}
+
+/* ---------- Tutto ---------- */
+.standing{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px dashed rgba(0,0,0,.12)}
+.standing:last-child{border-bottom:none}
+.standing .pos{font-family:'Bungee',cursive;width:24px;text-align:center;color:var(--pip);opacity:.55;font-size:.95rem}
+.standing.leader .pos{color:var(--gold);opacity:1}
+.standing .name{font-weight:800;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.standing .pts{font-weight:800;font-variant-numeric:tabular-nums;font-size:1.05rem}
+.standing .bar{height:6px;border-radius:3px;background:rgba(0,0,0,.1);margin-top:4px;overflow:hidden}
+.standing .bar i{display:block;height:100%;background:var(--green);border-radius:3px;transition:width .4s ease}
+.standing.leader .bar i{background:var(--gold)}
+
+.tutto-entry{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.tutto-entry .who{font-weight:800;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ivory)}
+.tutto-entry input{width:104px;text-align:right}
+.quick{display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 14px}
+.quick button{background:rgba(248,244,230,.08);border:2px solid rgba(248,244,230,.2);color:var(--ivory-dim);padding:7px 11px;font-size:.78rem;border-radius:8px}
+
+.hist-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 9px;text-align:right;font-size:.85rem;white-space:nowrap;color:var(--ivory)}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--ivory-dim);border-bottom:2px solid rgba(248,244,230,.2)}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--felt-dark)}
+tbody tr:nth-child(even){background:rgba(248,244,230,.04)}
+td.neg{color:#e8837a;font-weight:800}
+td.zero{color:var(--ivory-dim)}
+tfoot td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--gold)}
+
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
@@ -239,64 +301,186 @@ details.gamelog summary{cursor:pointer;font-weight:800;text-transform:uppercase;
 <script>
 'use strict';
 
-/* ================= State ================= */
-let setupPlayers = [];
-let setupOpts = {target:30, zeroRule:false, direction:'next', zeroLimit:2};
-let game = null;
-let history = [];
-let currentView = 'play';
-const STATS_KEY = 'dreissiger-stats-v2';
-let STATS = loadStats();
-
+/* ============================================================
+   GEMEINSAMER KERN (Router / Shell / Helpers)
+   ============================================================ */
 const $ = sel => document.querySelector(sel);
 const app = $('#app');
-const VARIANTS = [10,15,20,25,30,35,40]; // Zielwert; Würfelanzahl = Ziel/5
 
+let currentGame = null;   // null | '30er' | 'tutto'
+let currentView = 'play'; // play | scores (nur relevant, wenn ein Spiel aktiv ist)
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="Logo">${txt}</h1>`; }
+
+function dieSVG(v, big=false, colorCls=''){
+  let pips=''; for(let i=0;i<9;i++) pips+='<span class="p"></span>';
+  return `<span class="die${big?' big':''}${colorCls?' '+colorCls:''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
+}
+
+function playFX(kind, text){
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  document.querySelectorAll('.fx-overlay').forEach(el=>el.remove());
+  const ov=document.createElement('div'); ov.className='fx-overlay';
+  const msg=document.createElement('div'); msg.className='fx-msg '+(kind==='bad'?'bad':''); msg.textContent=text; ov.appendChild(msg);
+  const emojis = kind==='bad' ? ['💥','⚡','🎲'] : ['🎲','✨','🏆'];
+  for(let i=0;i<10;i++){ const p=document.createElement('span'); p.className='fx-p'; p.textContent=emojis[Math.floor(Math.random()*emojis.length)]; p.style.left=(Math.random()*92+2)+'%'; p.style.animationDelay=(Math.random()*.5)+'s'; ov.appendChild(p); }
+  document.body.appendChild(ov); setTimeout(()=>ov.remove(),2600);
+}
+
+/* ---------- Bildschirm-Wachhalten (Wake Lock) ---------- */
+let wakeLock = null;
+async function keepAwake(){
+  try{ if('wakeLock' in navigator){ wakeLock = await navigator.wakeLock.request('screen'); } }
+  catch(e){ /* nicht unterstützt oder abgelehnt — egal */ }
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && currentGame) keepAwake();
+});
+
+/* ---------- Spielauswahl-Bildschirm ---------- */
+function renderGamePicker(){
+  app.innerHTML = `
+    ${brandTitle('Würfeltafel')}
+    <div class="sub">Welches Spiel möchtet ihr spielen?</div>
+    <div class="gamepick">
+      <button class="pick-btn p30" onclick="chooseGame('30er')">
+        <span class="icon">🎲</span>
+        <span class="txt"><b>30er&#8209;Spiel</b><span>Lebenspunkte-Tracker · Würfeln, angreifen, überleben</span></span>
+      </button>
+      <button class="pick-btn ptutto" onclick="chooseGame('tutto')">
+        <span class="icon">🎯</span>
+        <span class="txt"><b>Tutto!</b><span>Punktetafel · Runden würfeln, Punkte sammeln, Ziel erreichen</span></span>
+      </button>
+    </div>
+  `;
+}
+function chooseGame(g){
+  currentGame = g;
+  currentView = 'play';
+  render();
+}
+function backToPicker(){
+  currentGame = null;
+  render();
+}
+
+function tabsHTML(){
+  return `<nav class="tabs" aria-label="Menü">
+    <button class="tab ${currentView==='play'?'on':''}" onclick="currentView='play';render()">🎲 Spielen</button>
+    <button class="tab ${currentView==='scores'?'on':''}" onclick="currentView='scores';render()">🏆 Scores</button>
+  </nav>`;
+}
+
+function render(){
+  if(!currentGame){ renderGamePicker(); return; }
+  if(currentGame==='30er'){
+    if(currentView==='scores') renderScores30(); else render30();
+    app.insertAdjacentHTML('afterbegin', tabsHTML());
+  } else if(currentGame==='tutto'){
+    if(currentView==='scores') renderScoresTutto(); else renderTutto();
+    app.insertAdjacentHTML('afterbegin', tabsHTML());
+  }
+}
+
+/* ============================================================
+   30er-SPIEL  (bestehende Logik unverändert, + Presets/Wizard)
+   ============================================================ */
+let setupPlayers30 = [];
+let setupOpts30 = {target:30, zeroRule:false, direction:'next', zeroLimit:2};
+let setupStep30 = 1;
+let game30 = null;
+let history30 = [];
+const STATS_KEY_30 = 'dreissiger-stats-v2';
+let STATS30 = loadStats30();
+const VARIANTS30 = [10,15,20,25,30,35,40]; // Zielwert; Würfelanzahl = Ziel/5
 function diceFor(t){ return t/5; }
 
-function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="30er Logo">${txt}</h1>`; }
-function loadStats(){
+/* ---------- Presets (Vorlagen) ---------- */
+const PRESET_KEY_30 = 'dreissiger-presets-v1';
+function loadPresets30(){
   try{
-    const s = JSON.parse(localStorage.getItem(STATS_KEY));
+    const p = JSON.parse(localStorage.getItem(PRESET_KEY_30));
+    if(Array.isArray(p)) return p;
+  }catch(e){}
+  return [];
+}
+let PRESETS30 = loadPresets30();
+function savePresets30(){ try{ localStorage.setItem(PRESET_KEY_30, JSON.stringify(PRESETS30)); }catch(e){} }
+
+function saveCurrentPreset30(){
+  const nameInput = $('#presetNameInput');
+  const name = (nameInput && nameInput.value || '').trim();
+  if(!name){ if(nameInput) nameInput.focus(); return; }
+  const preset = {
+    name,
+    players: setupPlayers30.map(p=>p.name),
+    opts: {...setupOpts30},
+    d: Date.now()
+  };
+  const idx = PRESETS30.findIndex(v=>v.name.toLowerCase()===name.toLowerCase());
+  if(idx>=0) PRESETS30[idx]=preset; else PRESETS30.push(preset);
+  PRESETS30 = PRESETS30.slice(0,12);
+  savePresets30();
+  renderSetup30();
+}
+function loadPreset30(i){
+  const v = PRESETS30[i];
+  if(!v) return;
+  setupPlayers30 = v.players.map(n=>({name:n}));
+  setupOpts30 = {...v.opts};
+  setupStep30 = 3;
+  renderSetup30();
+}
+function deletePreset30(i){
+  const v = PRESETS30[i];
+  if(v && confirm(`Vorlage "${v.name}" löschen?`)){
+    PRESETS30.splice(i,1);
+    savePresets30();
+    renderSetup30();
+  }
+}
+
+/* ---------- Statistiken ---------- */
+function loadStats30(){
+  try{
+    const s = JSON.parse(localStorage.getItem(STATS_KEY_30));
     if(s && typeof s==='object') return {players:s.players||{}, steals:s.steals||[], rolls:s.rolls||[]};
   }catch(e){}
   return {players:{}, steals:[], rolls:[]};
 }
-function saveStats(){ try{ localStorage.setItem(STATS_KEY, JSON.stringify(STATS)); }catch(e){} }
-function statPlayer(name){
-  if(!STATS.players[name]) STATS.players[name] = {wins:0, deaths:0, games:0};
-  return STATS.players[name];
+function saveStats30(){ try{ localStorage.setItem(STATS_KEY_30, JSON.stringify(STATS30)); }catch(e){} }
+function statPlayer30(name){
+  if(!STATS30.players[name]) STATS30.players[name] = {wins:0, deaths:0, games:0};
+  return STATS30.players[name];
 }
-function recordGameStart(){ if(!game) return; game.players.forEach(p=>statPlayer(p.name).games++); saveStats(); }
-function recordWin(name){ statPlayer(name).wins++; saveStats(); }
-function recordDeath(name){ statPlayer(name).deaths++; saveStats(); }
-function recordBadRoll(name,sum){
-  const short = game.target - sum;
+function recordGameStart30(){ if(!game30) return; game30.players.forEach(p=>statPlayer30(p.name).games++); saveStats30(); }
+function recordWin30(name){ statPlayer30(name).wins++; saveStats30(); }
+function recordDeath30(name){ statPlayer30(name).deaths++; saveStats30(); }
+function recordBadRoll30(name,sum){
+  const short = game30.target - sum;
   if(short<=0) return;
-  STATS.rolls.push({n:name, sum, T:game.target, short, dice:game.dice, d:Date.now()});
-  STATS.rolls.sort((a,b)=>b.short-a.short);
-  STATS.rolls = STATS.rolls.slice(0,10);
-  saveStats();
+  STATS30.rolls.push({n:name, sum, T:game30.target, short, dice:game30.dice, d:Date.now()});
+  STATS30.rolls.sort((a,b)=>b.short-a.short);
+  STATS30.rolls = STATS30.rolls.slice(0,10);
+  saveStats30();
 }
-function recordSteal(attacker,victim,amount){
+function recordSteal30(attacker,victim,amount){
   if(amount<=0) return;
-  STATS.steals.push({s:attacker, v:victim, a:amount, target:game.target, d:Date.now()});
-  STATS.steals.sort((a,b)=>b.a-a.a);
-  STATS.steals = STATS.steals.slice(0,10);
-  saveStats();
+  STATS30.steals.push({s:attacker, v:victim, a:amount, target:game30.target, d:Date.now()});
+  STATS30.steals.sort((a,b)=>b.a-a.a);
+  STATS30.steals = STATS30.steals.slice(0,10);
+  saveStats30();
 }
-function addLog(html, cls){ if(game){ game.log = game.log || []; game.log.unshift({html, cls:cls||''}); if(game.log.length>80) game.log.pop(); } }
+function addLog30(html, cls){ if(game30){ game30.log = game30.log || []; game30.log.unshift({html, cls:cls||''}); if(game30.log.length>80) game30.log.pop(); } }
 function fmtDate(ts){ return new Date(ts).toLocaleDateString('de-CH'); }
-function logHTML(){
-  if(!game || !game.log || !game.log.length) return '';
-  return `<details class="panel gamelog" open><summary>Protokoll</summary><ul class="log-list">${game.log.map(l=>`<li class="${l.cls}">${l.html}</li>`).join('')}</ul></details>`;
+function logHTML30(){
+  if(!game30 || !game30.log || !game30.log.length) return '';
+  return `<details class="panel gamelog" open><summary>Protokoll</summary><ul class="log-list">${game30.log.map(l=>`<li class="${l.cls}">${l.html}</li>`).join('')}</ul></details>`;
 }
-function tabsHTML(){
-  return `<nav class="tabs" aria-label="Menü"><button class="tab ${currentView==='play'?'on':''}" onclick="currentView='play';render()">🎲 Spielen</button><button class="tab ${currentView==='scores'?'on':''}" onclick="currentView='scores';render()">🏆 Scores</button></nav>`;
-}
-function renderScores(){
-  const byWins = Object.entries(STATS.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
-  const byDeaths = Object.entries(STATS.players).filter(([,v])=>v.deaths>0).sort((a,b)=>b[1].deaths-a[1].deaths).slice(0,10);
+function renderScores30(){
+  const byWins = Object.entries(STATS30.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
+  const byDeaths = Object.entries(STATS30.players).filter(([,v])=>v.deaths>0).sort((a,b)=>b[1].deaths-a[1].deaths).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
   app.innerHTML = `
     ${brandTitle('30er&#8209;Spiel')}
@@ -309,38 +493,25 @@ function renderScores(){
       ${byDeaths.length ? `<ol class="score-list shame">${byDeaths.map(([n,v])=>`<li><span class="val">${v.deaths}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Ausschiede oder Minus-Stürze registriert.')}
     </div>
     <div class="panel"><h2>💥 Höchste Abzüge</h2>
-      ${STATS.steals.length ? `<ol class="score-list">${STATS.steals.map(e=>`<li><span class="val">−${e.a}</span><span class="who">${esc(e.s)} → ${esc(e.v)}</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Abzüge registriert.')}
+      ${STATS30.steals.length ? `<ol class="score-list">${STATS30.steals.map(e=>`<li><span class="val">−${e.a}</span><span class="who">${esc(e.s)} → ${esc(e.v)}</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Abzüge registriert.')}
     </div>
     <div class="panel"><h2>🎲 Schlechteste Würfe</h2>
-      ${STATS.rolls.length ? `<ol class="score-list shame">${STATS.rolls.map(e=>`<li><span class="val">−${e.short}</span><span class="who">${esc(e.n)}: ${e.sum} gewürfelt (Ziel ${e.T})</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Würfe unter der Zielzahl gespeichert.')}
+      ${STATS30.rolls.length ? `<ol class="score-list shame">${STATS30.rolls.map(e=>`<li><span class="val">−${e.short}</span><span class="who">${esc(e.n)}: ${e.sum} gewürfelt (Ziel ${e.T})</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Würfe unter der Zielzahl gespeichert.')}
     </div>
-    <button class="btn-ghost btn-wide" onclick="resetStats()">Statistiken zurücksetzen</button>`;
+    <button class="btn-ghost btn-wide" onclick="resetStats30()">Statistiken zurücksetzen</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>`;
 }
-function resetStats(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS={players:{},steals:[],rolls:[]}; saveStats(); render(); } }
-function playFX(kind, text){
-  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  document.querySelectorAll('.fx-overlay').forEach(el=>el.remove());
-  const ov=document.createElement('div'); ov.className='fx-overlay';
-  const msg=document.createElement('div'); msg.className='fx-msg '+(kind==='bad'?'bad':''); msg.textContent=text; ov.appendChild(msg);
-  const emojis = kind==='bad' ? ['💥','⚡','🎲'] : ['🎲','✨','🏆'];
-  for(let i=0;i<10;i++){ const p=document.createElement('span'); p.className='fx-p'; p.textContent=emojis[Math.floor(Math.random()*emojis.length)]; p.style.left=(Math.random()*92+2)+'%'; p.style.animationDelay=(Math.random()*.5)+'s'; ov.appendChild(p); }
-  document.body.appendChild(ov); setTimeout(()=>ov.remove(),2600);
-}
+function resetStats30(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS30={players:{},steals:[],rolls:[]}; saveStats30(); render(); } }
 
-
-function snapshot(){ history.push(JSON.stringify(game)); if(history.length>60) history.shift(); }
-function undo(){
-  if(!history.length) return;
-  game = JSON.parse(history.pop());
+function snapshot30(){ history30.push(JSON.stringify(game30)); if(history30.length>60) history30.shift(); }
+function undo30(){
+  if(!history30.length) return;
+  game30 = JSON.parse(history30.pop());
   render();
 }
 
-function dieSVG(v, big=false, red=false){
-  let pips=''; for(let i=0;i<9;i++) pips+='<span class="p"></span>';
-  return `<span class="die${big?' big':''}${red?' red':''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
-}
-
-/* ============ Sprüche ============ */
+/* ---------- Sprüche ---------- */
 const QUIPS = {
   lowRoll: ["Autsch, das tat weh! 🤕","Würfel kaputt oder was? 🎲","Selbstzerstörung aktiviert! 💣","Die Würfel hassen dich heute. 😅","Das gibt eine Runde zum Vergessen…","Hände zittern? 🫨"],
   tinyMiss: ["Sooo knapp! 😬","Ein Auge hat gefehlt!","Fast wär's was geworden…","Zum Haareraufen! 💇"],
@@ -350,267 +521,301 @@ const QUIPS = {
   elimination: ["Game over! ☠️","Ab auf die Ersatzbank! 🪑","Einer weniger… 🪦","Danke fürs Mitspielen! 👋"],
   comeback: ["Comeback des Jahres! 🚀","Zurück von den Toten! 🧟","Auferstanden! ✨","Totgesagte würfeln länger. 😤"]
 };
-function quip(kind){
-  const arr = QUIPS[kind];
-  return arr[Math.floor(Math.random()*arr.length)];
-}
+function quip(kind){ const arr = QUIPS[kind]; return arr[Math.floor(Math.random()*arr.length)]; }
 
-/* ============ Bildschirm-Wachhalten (Wake Lock) ============ */
-let wakeLock = null;
-async function keepAwake(){
-  try{
-    if('wakeLock' in navigator){
-      wakeLock = await navigator.wakeLock.request('screen');
-    }
-  }catch(e){ /* nicht unterstützt oder abgelehnt — egal */ }
-}
-document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='visible' && game) keepAwake();
-});
+/* ---------- Setup-Wizard (3 Schritte) ---------- */
+function renderSetup30(){
+  const step = setupStep30;
+  const titles = {1:'Spieler', 2:'Regeln', 3:'Übersicht & Vorlagen'};
 
-/* ================= Setup ================= */
-function renderSetup(){
-  const list = setupPlayers.map((p,i)=>`
-    <div class="setup-item">
-      <span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span>
-      <span class="n">${esc(p.name)}</span>
-      <button class="x" aria-label="${esc(p.name)} entfernen" onclick="removePlayer(${i})">✕</button>
-    </div>`).join('');
+  let body = '';
+  if(step===1){
+    const list = setupPlayers30.map((p,i)=>`
+      <div class="setup-item">
+        <span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span>
+        <span class="n">${esc(p.name)}</span>
+        <button class="x" aria-label="${esc(p.name)} entfernen" onclick="removePlayer30(${i})">✕</button>
+      </div>`).join('');
 
-  const variants = VARIANTS.map(t=>`
-    <button class="${setupOpts.target===t?'on':''}" onclick="setTarget(${t})">${t}er<small>${diceFor(t)} Würfel</small></button>
-  `).join('');
+    const variants = VARIANTS30.map(t=>`
+      <button class="${setupOpts30.target===t?'on':''}" onclick="setTarget30(${t})">${t}er<small>${diceFor(t)} Würfel</small></button>
+    `).join('');
 
-  app.innerHTML = `
-    ${brandTitle(`${setupOpts.target}er&#8209;Spiel`)}
-    <div class="sub">Lebenspunkte-Tracker für den Würfeltisch</div>
+    const presetList = PRESETS30.length ? `
+      <div class="panel">
+        <h2>Vorlage laden</h2>
+        ${PRESETS30.map((v,i)=>`
+          <div class="preset-item">
+            <div class="pn"><b>${esc(v.name)}</b><small>${v.players.map(esc).join(', ')} · ${v.opts.target}er · ${v.opts.zeroRule?'0er-Regel':'Instant-Death'}</small></div>
+            <div class="pbtns">
+              <button class="btn-ivory" onclick="loadPreset30(${i})">Laden</button>
+              <button class="btn-ghost" onclick="deletePreset30(${i})" aria-label="Vorlage löschen">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>` : '';
 
-    <div class="panel">
-      <h2>Spielvariante</h2>
-      <div class="variant-grid">${variants}</div>
-      <div class="hint">Ziel: mit ${diceFor(setupOpts.target)} Würfeln mindestens ${setupOpts.target} erreichen (Schnitt 5 pro Würfel). Regeln sind in allen Varianten gleich.</div>
-    </div>
-
-    <div class="panel">
-      <h2>Spieler hinzufügen</h2>
-      <div style="margin-bottom:10px">
-        <label for="pname">Name</label>
-        <input type="text" id="pname" maxlength="14" autocomplete="off" enterkeyhint="done">
+    body = `
+      ${presetList}
+      <div class="panel">
+        <h2>Spielvariante</h2>
+        <div class="variant-grid">${variants}</div>
+        <div class="hint">Ziel: mit ${diceFor(setupOpts30.target)} Würfeln mindestens ${setupOpts30.target} erreichen (Schnitt 5 pro Würfel). Regeln sind in allen Varianten gleich.</div>
       </div>
-      <button class="btn-ivory btn-wide" onclick="addPlayer()">+ Hinzufügen</button>
-      <div class="hint">Spieler in Sitzreihenfolge eintragen — der zuerst eingetragene würfelt auch zuerst. Die Startleben werden nach dem Start als Eröffnungsrunde erwürfelt.</div>
-    </div>
 
-    <div class="panel">
-      <h2>Regeln</h2>
-      <div class="opt">
-        <input type="checkbox" id="optzero" ${setupOpts.zeroRule?'checked':''} onchange="setupOpts.zeroRule=this.checked;renderSetup()">
-        <div class="txt">0er-Regel (Comeback)
-          <small>Nur ab 3 Spielern sinnvoll. Leben können ins Minus. Wer unter 0 ist, wird beim Abziehen übersprungen und darf selbst nicht angreifen – kämpft sich aber per Gutschrift wieder hoch.</small>
+      <div class="panel">
+        <h2>Spieler hinzufügen</h2>
+        <div style="margin-bottom:10px">
+          <label for="pname30">Name</label>
+          <input type="text" id="pname30" maxlength="14" autocomplete="off" enterkeyhint="done">
+        </div>
+        <button class="btn-ivory btn-wide" onclick="addPlayer30()">+ Hinzufügen</button>
+        <div class="hint">Spieler in Sitzreihenfolge eintragen — der zuerst eingetragene würfelt auch zuerst.</div>
+      </div>
+
+      ${setupPlayers30.length ? `<div class="panel"><h2>Am Tisch (${setupPlayers30.length})</h2>${list}</div>` : ''}
+    `;
+  } else if(step===2){
+    body = `
+      <div class="panel">
+        <h2>Regeln</h2>
+        <div class="opt">
+          <input type="checkbox" id="optzero30" ${setupOpts30.zeroRule?'checked':''} onchange="setupOpts30.zeroRule=this.checked;renderSetup30()">
+          <div class="txt">0er-Regel (Comeback)
+            <small>Nur ab 3 Spielern sinnvoll. Leben können ins Minus. Wer unter 0 ist, wird beim Abziehen übersprungen und darf selbst nicht angreifen – kämpft sich aber per Gutschrift wieder hoch.</small>
+          </div>
+        </div>
+        ${setupOpts30.zeroRule ? `
+        <label style="margin-top:8px">Spiel endet, sobald so viele Spieler unter 0 sind:</label>
+        <div class="stepper" style="margin:6px 0 4px">
+          <button onclick="changeZeroLimit30(-1)" aria-label="weniger" style="width:44px;height:44px;font-size:1.3rem">−</button>
+          <span class="val" style="font-size:1.8rem;min-width:50px">${setupOpts30.zeroLimit}</span>
+          <button onclick="changeZeroLimit30(1)" aria-label="mehr" style="width:44px;height:44px;font-size:1.3rem">+</button>
+        </div>
+        <div class="hint" style="margin-top:0">Bei 2 Spielern endet das Spiel automatisch, sobald einer unter 0 fällt. Das Limit wird beim Start auf max. Spielerzahl − 1 begrenzt.</div>
+        ` : ''}
+        <label style="margin-top:12px">Abzüge gehen an …</label>
+        <div class="seg" role="group" aria-label="Angriffsrichtung">
+          <button class="${setupOpts30.direction==='next'?'on':''}" onclick="setDir30('next')">Spieler nach mir →</button>
+          <button class="${setupOpts30.direction==='prev'?'on':''}" onclick="setDir30('prev')">← Spieler vor mir</button>
         </div>
       </div>
-      ${setupOpts.zeroRule ? `
-      <label style="margin-top:8px">Spiel endet, sobald so viele Spieler unter 0 sind:</label>
-      <div class="stepper" style="margin:6px 0 4px">
-        <button onclick="changeZeroLimit(-1)" aria-label="weniger" style="width:44px;height:44px;font-size:1.3rem">−</button>
-        <span class="val" style="font-size:1.8rem;min-width:50px">${setupOpts.zeroLimit}</span>
-        <button onclick="changeZeroLimit(1)" aria-label="mehr" style="width:44px;height:44px;font-size:1.3rem">+</button>
+    `;
+  } else {
+    body = `
+      <div class="panel">
+        <h2>Übersicht</h2>
+        <div class="hint" style="margin:0 0 10px">${setupOpts30.target}er-Spiel · ${diceFor(setupOpts30.target)} Würfel · ${setupOpts30.zeroRule?`0er-Regel (Ende bei ${setupOpts30.zeroLimit} unter 0)`:'Instant-Death'} · Abzüge ${setupOpts30.direction==='next'?'im Uhrzeigersinn':'gegen den Uhrzeigersinn'}</div>
+        ${setupPlayers30.map((p,i)=>`<div class="setup-item"><span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span><span class="n">${esc(p.name)}</span></div>`).join('')}
       </div>
-      <div class="hint" style="margin-top:0">Bei 2 Spielern endet das Spiel automatisch, sobald einer unter 0 fällt. Das Limit wird beim Start auf max. Spielerzahl − 1 begrenzt.</div>
-      ` : ''}
-      <label style="margin-top:12px">Abzüge gehen an …</label>
-      <div class="seg" role="group" aria-label="Angriffsrichtung">
-        <button class="${setupOpts.direction==='next'?'on':''}" onclick="setDir('next')">Spieler nach mir →</button>
-        <button class="${setupOpts.direction==='prev'?'on':''}" onclick="setDir('prev')">← Spieler vor mir</button>
+      <div class="panel">
+        <h2>Als Vorlage speichern</h2>
+        <div class="hint" style="margin:0 0 10px">Speichert Spieler und Regeln unter einem Namen — praktisch für den nächsten Spieleabend.</div>
+        <div class="row">
+          <input type="text" id="presetNameInput" maxlength="24" placeholder="z. B. Stammtisch" autocomplete="off">
+          <button class="btn-ivory" onclick="saveCurrentPreset30()" style="flex:none">Speichern</button>
+        </div>
       </div>
+    `;
+  }
+
+  app.innerHTML = `
+    ${brandTitle(`${setupOpts30.target}er&#8209;Spiel`)}
+    <div class="sub">Lebenspunkte-Tracker für den Würfeltisch</div>
+    <div class="stepbar">Schritt <b>${step}</b> von 3 · ${titles[step]}</div>
+    ${body}
+    <div class="wizard-nav">
+      ${step>1 ? `<button class="btn-ghost" onclick="setupStep30--;renderSetup30()">← Zurück</button>` : `<button class="btn-ghost" onclick="backToPicker()">← Spielauswahl</button>`}
+      ${step<3
+        ? `<button class="btn-primary" onclick="setupNext30()">Weiter →</button>`
+        : `<button class="btn-primary" onclick="startGame30()" ${setupPlayers30.length<2?'disabled':''}>Spiel starten 🎲</button>`}
     </div>
-
-    ${setupPlayers.length ? `<div class="panel"><h2>Am Tisch (${setupPlayers.length})</h2>${list}</div>` : ''}
-
-    <button class="btn-primary btn-wide" onclick="startGame()" ${setupPlayers.length<2?'disabled':''}>
-      Spiel starten 🎲
-    </button>
-    ${setupPlayers.length<2?'<div class="hint" style="text-align:center">Mindestens 2 Spieler nötig.</div>':''}
+    ${step===1 && setupPlayers30.length<2 ? '<div class="hint" style="text-align:center">Mindestens 2 Spieler nötig.</div>' : ''}
   `;
-  $('#pname').focus();
-  $('#pname').addEventListener('keydown',e=>{if(e.key==='Enter')addPlayer();});
+  if(step===1){
+    const inp = $('#pname30');
+    inp.focus();
+    inp.addEventListener('keydown',e=>{if(e.key==='Enter')addPlayer30();});
+  }
 }
-
-function setTarget(t){ setupOpts.target=t; renderSetup(); }
-function setDir(d){ setupOpts.direction=d; renderSetup(); }
-function changeZeroLimit(d){ setupOpts.zeroLimit = Math.max(1, setupOpts.zeroLimit+d); renderSetup(); }
-
-function addPlayer(){
-  const name = $('#pname').value.trim();
-  if(!name){ $('#pname').focus(); return; }
-  setupPlayers.push({name});
-  renderSetup();
+function setupNext30(){
+  if(setupStep30===1 && setupPlayers30.length<2){ return; }
+  setupStep30++;
+  renderSetup30();
 }
-function removePlayer(i){ setupPlayers.splice(i,1); renderSetup(); }
+function setTarget30(t){ setupOpts30.target=t; renderSetup30(); }
+function setDir30(d){ setupOpts30.direction=d; renderSetup30(); }
+function changeZeroLimit30(d){ setupOpts30.zeroLimit = Math.max(1, setupOpts30.zeroLimit+d); renderSetup30(); }
+function addPlayer30(){
+  const inp = $('#pname30');
+  const name = inp.value.trim();
+  if(!name){ inp.focus(); return; }
+  setupPlayers30.push({name});
+  renderSetup30();
+}
+function removePlayer30(i){ setupPlayers30.splice(i,1); renderSetup30(); }
 
-function startGame(){
-  const players = setupPlayers.map(p=>({name:p.name, lives:null, alive:true}));
-  const zeroLimit = Math.max(1, Math.min(setupOpts.zeroLimit, players.length-1));
-  game = {
+function startGame30(){
+  const players = setupPlayers30.map(p=>({name:p.name, lives:null, alive:true}));
+  const zeroLimit = Math.max(1, Math.min(setupOpts30.zeroLimit, players.length-1));
+  game30 = {
     players, currentIdx:0, initIdx:0, phase:'init',
-    target:setupOpts.target, dice:diceFor(setupOpts.target),
+    target:setupOpts30.target, dice:diceFor(setupOpts30.target),
     attackNum:0, attackCount:0, msg:null,
-    zeroRule:setupOpts.zeroRule, direction:setupOpts.direction,
+    zeroRule:setupOpts30.zeroRule, direction:setupOpts30.direction,
     zeroLimit, turn:1,
-    biggestHit:null, /* {attacker, victim, dmg} */
+    biggestHit:null,
     log:[]
   };
-  history=[];
-  recordGameStart();
-  addLog(`Spiel gestartet: ${players.map(p=>`<b>${esc(p.name)}</b>`).join(', ')} · Ziel ${setupOpts.target} · ${setupOpts.zeroRule?'0er-Regel':'Instant-Death'} · ${setupOpts.direction==='next'?'Abzug nach rechts':'Abzug nach links'}.`, 'round');
+  history30=[];
+  recordGameStart30();
+  addLog30(`Spiel gestartet: ${players.map(p=>`<b>${esc(p.name)}</b>`).join(', ')} · Ziel ${setupOpts30.target} · ${setupOpts30.zeroRule?'0er-Regel':'Instant-Death'} · ${setupOpts30.direction==='next'?'Abzug nach rechts':'Abzug nach links'}.`, 'round');
   keepAwake();
   render();
 }
 
-function submitInit(sum){
-  snapshot();
-  game.players[game.initIdx].lives = sum;
-  addLog(`<b>${esc(game.players[game.initIdx].name)}</b> startet mit <b>${sum}</b> Leben.`);
-  game.initIdx++;
-  if(game.initIdx >= game.players.length){
-    game.phase='roll';
-    game.currentIdx=0;
-    game.msg = {text:`Alle Startleben erwürfelt — ${esc(game.players[0].name)} beginnt!`, type:'good', hitIdx:-1};
+function submitInit30(sum){
+  snapshot30();
+  game30.players[game30.initIdx].lives = sum;
+  addLog30(`<b>${esc(game30.players[game30.initIdx].name)}</b> startet mit <b>${sum}</b> Leben.`);
+  game30.initIdx++;
+  if(game30.initIdx >= game30.players.length){
+    game30.phase='roll';
+    game30.currentIdx=0;
+    game30.msg = {text:`Alle Startleben erwürfelt — ${esc(game30.players[0].name)} beginnt!`, type:'good', hitIdx:-1};
   }
   render();
 }
 
-/* ================= Game logic ================= */
-function stepIdx(from, step){
-  const n = game.players.length;
-  const d = game.direction==='prev' ? -1 : 1;
+/* ---------- Spiel-Logik ---------- */
+function stepIdx30(from, step){
+  const n = game30.players.length;
+  const d = game30.direction==='prev' ? -1 : 1;
   return ((from + d*step) % n + n) % n;
 }
-function nextTurnIdx(from){
-  const n = game.players.length;
+function nextTurnIdx30(from){
+  const n = game30.players.length;
   for(let s=1;s<=n;s++){
     const i=(from+s)%n;
-    if(game.players[i].alive) return i;
+    if(game30.players[i].alive) return i;
   }
   return from;
 }
-function attackTargetIdx(from){
-  const n = game.players.length;
+function attackTargetIdx30(from){
+  const n = game30.players.length;
   for(let s=1;s<n;s++){
-    const i = stepIdx(from,s);
-    const p = game.players[i];
+    const i = stepIdx30(from,s);
+    const p = game30.players[i];
     if(!p.alive) continue;
-    if(game.zeroRule && p.lives<0) continue;
+    if(game30.zeroRule && p.lives<0) continue;
     return i;
   }
   return -1;
 }
-function livingCount(){ return game.players.filter(p=>p.alive).length; }
-function underZeroCount(){ return game.players.filter(p=>p.lives!==null && p.lives<0).length; }
+function livingCount30(){ return game30.players.filter(p=>p.alive).length; }
+function underZeroCount30(){ return game30.players.filter(p=>p.lives!==null && p.lives<0).length; }
 
-function submitSum(sum){
-  snapshot();
-  const cur = game.players[game.currentIdx];
-  const T = game.target;
-  const wasUnderZero = game.zeroRule && cur.lives < 0; /* Stand VOR dem Wurf zählt */
+function submitSum30(sum){
+  snapshot30();
+  const cur = game30.players[game30.currentIdx];
+  const T = game30.target;
+  const wasUnderZero = game30.zeroRule && cur.lives < 0;
   if(sum<T){
     const dmg = T-sum;
     cur.lives = cur.lives - dmg;
-    recordBadRoll(cur.name, sum);
-    addLog(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>−${dmg}</b> → Stand <b>${cur.lives}</b>.`);
+    recordBadRoll30(cur.name, sum);
+    addLog30(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>−${dmg}</b> → Stand <b>${cur.lives}</b>.`);
     let m = `${esc(cur.name)}: ${sum} gewürfelt → −${dmg} Leben`;
     let q = dmg >= Math.ceil(T/4) ? quip('lowRoll') : (dmg<=2 ? quip('tinyMiss') : null);
-    if(!game.zeroRule){
+    if(!game30.zeroRule){
       cur.lives = Math.max(0, cur.lives);
-      if(cur.lives===0){ cur.alive=false; recordDeath(cur.name); addLog(`💀 <b>${esc(cur.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
+      if(cur.lives===0){ cur.alive=false; recordDeath30(cur.name); addLog30(`💀 <b>${esc(cur.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
     }
-    game.msg = {text:m, type:'bad', hitIdx:game.currentIdx, fx:'hit', quip:q};
-    endTurn();
+    game30.msg = {text:m, type:'bad', hitIdx:game30.currentIdx, fx:'hit', quip:q};
+    endTurn30();
   } else if(sum===T){
-    addLog(`<b>${esc(cur.name)}</b> würfelt genau <b>${T}</b> – nichts passiert.`);
-    game.msg = {text:`${esc(cur.name)}: genau ${T} — nichts passiert.`, type:'', hitIdx:-1, quip:quip('perfect')};
-    endTurn();
+    addLog30(`<b>${esc(cur.name)}</b> würfelt genau <b>${T}</b> – nichts passiert.`);
+    game30.msg = {text:`${esc(cur.name)}: genau ${T} — nichts passiert.`, type:'', hitIdx:-1, quip:quip('perfect')};
+    endTurn30();
   } else {
     const diff = sum-T;
     cur.lives += diff;
-    addLog(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>+${diff}</b> → Stand <b>${cur.lives}</b>.`);
+    addLog30(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>+${diff}</b> → Stand <b>${cur.lives}</b>.`);
     if(wasUnderZero){
-      /* Wer den Zug unter 0 beginnt, darf nicht angreifen — nur Gutschrift */
       let q = cur.lives>=0 ? quip('comeback') : null;
-      game.msg = {text:`${esc(cur.name)}: ${sum} → +${diff} Leben gutgeschrieben (unter 0 gestartet, kein Angriff)`, type:'good', hitIdx:game.currentIdx, fx:'heal', quip:q};
-      endTurn();
+      game30.msg = {text:`${esc(cur.name)}: ${sum} → +${diff} Leben gutgeschrieben (unter 0 gestartet, kein Angriff)`, type:'good', hitIdx:game30.currentIdx, fx:'heal', quip:q};
+      endTurn30();
       return;
     }
-    game.attackNum = diff;
-    game.attackCount = 0;
-    game.phase = 'attack';
-    const q = diff >= game.dice ? quip('highRoll') : null;
-    game.msg = {text:`+${diff} Leben gutgeschrieben für ${esc(cur.name)}!`, type:'good', hitIdx:game.currentIdx, fx:'heal', quip:q};
+    game30.attackNum = diff;
+    game30.attackCount = 0;
+    game30.phase = 'attack';
+    const q = diff >= game30.dice ? quip('highRoll') : null;
+    game30.msg = {text:`+${diff} Leben gutgeschrieben für ${esc(cur.name)}!`, type:'good', hitIdx:game30.currentIdx, fx:'heal', quip:q};
     render();
   }
 }
 
-function changeAttackCount(d){
-  game.attackCount = Math.max(0, (game.attackCount||0)+d);
-  $('#atkval').textContent = game.attackCount;
-  $('#atkdmg').textContent = game.attackCount * game.attackNum;
+function changeAttackCount30(d){
+  game30.attackCount = Math.max(0, (game30.attackCount||0)+d);
+  $('#atkval').textContent = game30.attackCount;
+  $('#atkdmg').textContent = game30.attackCount * game30.attackNum;
 }
 
-function submitAttack(){
-  snapshot();
-  const cur = game.players[game.currentIdx];
-  const targetIdx = attackTargetIdx(game.currentIdx);
-  const dmg = (game.attackCount||0) * game.attackNum;
+function submitAttack30(){
+  snapshot30();
+  const cur = game30.players[game30.currentIdx];
+  const targetIdx = attackTargetIdx30(game30.currentIdx);
+  const dmg = (game30.attackCount||0) * game30.attackNum;
   if(targetIdx<0){
-    game.msg = {text:`Kein gültiges Angriffsziel — alle anderen sind geschützt.`, type:'', hitIdx:-1};
+    game30.msg = {text:`Kein gültiges Angriffsziel — alle anderen sind geschützt.`, type:'', hitIdx:-1};
   } else if(dmg>0){
-    const target = game.players[targetIdx];
+    const target = game30.players[targetIdx];
     target.lives = target.lives - dmg;
-    recordSteal(cur.name, target.name, dmg);
-    addLog(`<b>${esc(cur.name)}</b> trifft <b>${esc(target.name)}</b>: ${game.attackCount} × ${game.attackNum} → <b>−${dmg}</b> → Stand <b>${target.lives}</b>.`);
-    const face = Math.min(game.attackNum, 6);
-    const special = game.attackNum > 6 ? ` (à ${game.attackNum})` : '';
-    let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game.attackCount}× ${face}${special} → −${dmg} Leben`;
-    let q = dmg >= Math.ceil(game.target/3) ? quip('bigAttack') : null;
-    if(!game.biggestHit || dmg > game.biggestHit.dmg){
-      game.biggestHit = {attacker:cur.name, victim:target.name, dmg};
+    recordSteal30(cur.name, target.name, dmg);
+    addLog30(`<b>${esc(cur.name)}</b> trifft <b>${esc(target.name)}</b>: ${game30.attackCount} × ${game30.attackNum} → <b>−${dmg}</b> → Stand <b>${target.lives}</b>.`);
+    const face = Math.min(game30.attackNum, 6);
+    const special = game30.attackNum > 6 ? ` (à ${game30.attackNum})` : '';
+    let m = `${esc(cur.name)} trifft ${esc(target.name)} mit ${game30.attackCount}× ${face}${special} → −${dmg} Leben`;
+    let q = dmg >= Math.ceil(game30.target/3) ? quip('bigAttack') : null;
+    if(!game30.biggestHit || dmg > game30.biggestHit.dmg){
+      game30.biggestHit = {attacker:cur.name, victim:target.name, dmg};
     }
-    if(!game.zeroRule){
+    if(!game30.zeroRule){
       target.lives = Math.max(0, target.lives);
-      if(target.lives===0){ target.alive=false; recordDeath(target.name); addLog(`💀 <b>${esc(target.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
+      if(target.lives===0){ target.alive=false; recordDeath30(target.name); addLog30(`💀 <b>${esc(target.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
     }
-    game.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit', quip:q};
+    game30.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit', quip:q};
   } else {
-    addLog(`<b>${esc(cur.name)}</b> trifft keine ${Math.min(game.attackNum,6)}er – kein Abzug.`);
-    game.msg = {text:`${esc(cur.name)}: keine ${Math.min(game.attackNum,6)}er gewürfelt — Glück gehabt.`, type:'', hitIdx:-1};
+    addLog30(`<b>${esc(cur.name)}</b> trifft keine ${Math.min(game30.attackNum,6)}er – kein Abzug.`);
+    game30.msg = {text:`${esc(cur.name)}: keine ${Math.min(game30.attackNum,6)}er gewürfelt — Glück gehabt.`, type:'', hitIdx:-1};
   }
-  game.phase='roll';
-  endTurn();
+  game30.phase='roll';
+  endTurn30();
 }
 
-function endTurn(){
-  if(game.zeroRule && underZeroCount()>=game.zeroLimit){
-    game.phase='ranking';
-    if(!game.winnerRecorded){ const top=[...game.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin(top.name); addLog(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game.winnerRecorded=true; }
+function endTurn30(){
+  if(game30.zeroRule && underZeroCount30()>=game30.zeroLimit){
+    game30.phase='ranking';
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; }
     render();
     return;
   }
-  if(!game.zeroRule && livingCount()<=1){
-    game.phase='winner';
-    if(!game.winnerRecorded){ const w=game.players.find(p=>p.alive); if(w){recordWin(w.name); addLog(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round');} game.winnerRecorded=true; }
+  if(!game30.zeroRule && livingCount30()<=1){
+    game30.phase='winner';
+    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; }
     render();
     return;
   }
-  game.currentIdx = nextTurnIdx(game.currentIdx);
-  game.turn++;
-  game.phase='roll';
+  game30.currentIdx = nextTurnIdx30(game30.currentIdx);
+  game30.turn++;
+  game30.phase='roll';
   render();
 }
 
-/* ================= Render game ================= */
-function sumGrid(clickFn, highlight=true){
+/* ---------- Render Spiel ---------- */
+function sumGrid30(clickFn, highlight=true){
   let grid='';
-  const min = game.dice, max = game.dice*6, T = game.target;
+  const min = game30.dice, max = game30.dice*6, T = game30.target;
   for(let s=min;s<=max;s++){
     const cls = highlight ? (s===T?'starget':(s>T?'shigh':'')) : '';
     grid += `<button class="${cls}" onclick="${clickFn}(${s})">${s}</button>`;
@@ -618,17 +823,18 @@ function sumGrid(clickFn, highlight=true){
   return `<div class="sumgrid">${grid}</div>`;
 }
 
-function renderGame(){
-  if(game.phase==='winner'){ renderWinner(); return; }
-  if(game.phase==='ranking'){ renderRanking(); return; }
+function render30(){
+  if(!game30){ renderSetup30(); return; }
+  if(game30.phase==='winner'){ renderWinner30(); return; }
+  if(game30.phase==='ranking'){ renderRanking30(); return; }
 
-  const isInit = game.phase==='init';
-  const activeIdx = isInit ? game.initIdx : game.currentIdx;
-  const cur = game.players[activeIdx];
+  const isInit = game30.phase==='init';
+  const activeIdx = isInit ? game30.initIdx : game30.currentIdx;
+  const cur = game30.players[activeIdx];
 
-  const cards = game.players.map((p,i)=>{
-    const shielded = !isInit && game.zeroRule && p.lives!==null && p.lives<0;
-    const fx = game.msg && game.msg.hitIdx===i ? (game.msg.fx||'') : '';
+  const cards = game30.players.map((p,i)=>{
+    const shielded = !isInit && game30.zeroRule && p.lives!==null && p.lives<0;
+    const fx = game30.msg && game30.msg.hitIdx===i ? (game30.msg.fx||'') : '';
     const livesTxt = !p.alive ? '✕' : (p.lives===null ? '–' : p.lives);
     return `
     <div class="player-card ${i===activeIdx?'current':''} ${p.alive?'':'dead'} ${shielded?'shield':''} ${fx}">
@@ -642,80 +848,80 @@ function renderGame(){
     action = `
       <div class="panel">
         <h2>Startleben: ${esc(cur.name)}</h2>
-        <div class="hint" style="margin:0 0 4px">Alle ${game.dice} Würfel auf einmal würfeln und die Summe antippen — nichts wird abgezogen.</div>
-        ${sumGrid('submitInit', false)}
+        <div class="hint" style="margin:0 0 4px">Alle ${game30.dice} Würfel auf einmal würfeln und die Summe antippen — nichts wird abgezogen.</div>
+        ${sumGrid30('submitInit30', false)}
       </div>`;
-  } else if(game.phase==='roll'){
+  } else if(game30.phase==='roll'){
     action = `
       <div class="panel">
         <h2>${esc(cur.name)} würfelt</h2>
-        <div class="hint" style="margin:0 0 4px">Endsumme aller ${game.dice} Würfel antippen:</div>
-        ${sumGrid('submitSum')}
-        <div class="hint">Über ${game.target}: Differenz wird gutgeschrieben, danach greifst du an.</div>
+        <div class="hint" style="margin:0 0 4px">Endsumme aller ${game30.dice} Würfel antippen:</div>
+        ${sumGrid30('submitSum30')}
+        <div class="hint">Über ${game30.target}: Differenz wird gutgeschrieben, danach greifst du an.</div>
       </div>`;
-  } else if(game.phase==='attack'){
-    const targetIdx = attackTargetIdx(game.currentIdx);
-    const tName = targetIdx>=0 ? esc(game.players[targetIdx].name) : '— (alle geschützt)';
-    const face = Math.min(game.attackNum, 6);
-    const special = game.attackNum > 6;
+  } else if(game30.phase==='attack'){
+    const targetIdx = attackTargetIdx30(game30.currentIdx);
+    const tName = targetIdx>=0 ? esc(game30.players[targetIdx].name) : '— (alle geschützt)';
+    const face = Math.min(game30.attackNum, 6);
+    const special = game30.attackNum > 6;
     action = `
       <div class="panel">
         <h2>Angriff! 🎯</h2>
         <div class="attack-head">
-          ${dieSVG(face,true,true)}
-          <div class="txt">${esc(cur.name)} jagt <b>${face}er</b>${special?` — jede 6 zählt als <b>${game.attackNum}</b>`:''}.<br>
+          ${dieSVG(face,true,'red')}
+          <div class="txt">${esc(cur.name)} jagt <b>${face}er</b>${special?` — jede 6 zählt als <b>${game30.attackNum}</b>`:''}.<br>
           Weiterwürfeln, solange pro Wurf mind. eine ${face} fällt.<br>
           Opfer: <b>${tName}</b></div>
         </div>
         <label style="text-align:center">Wie viele ${face}er liegen am Ende?</label>
         <div class="stepper">
-          <button onclick="changeAttackCount(-1)" aria-label="weniger">−</button>
-          <span class="val" id="atkval">${game.attackCount||0}</span>
-          <button onclick="changeAttackCount(1)" aria-label="mehr">+</button>
+          <button onclick="changeAttackCount30(-1)" aria-label="weniger">−</button>
+          <span class="val" id="atkval">${game30.attackCount||0}</span>
+          <button onclick="changeAttackCount30(1)" aria-label="mehr">+</button>
         </div>
-        <div class="banner">Schaden: <span id="atkdmg">${(game.attackCount||0)*game.attackNum}</span> Leben</div>
-        <button class="btn-primary btn-wide" onclick="submitAttack()">Schaden verteilen</button>
+        <div class="banner">Schaden: <span id="atkdmg">${(game30.attackCount||0)*game30.attackNum}</span> Leben</div>
+        <button class="btn-primary btn-wide" onclick="submitAttack30()">Schaden verteilen</button>
       </div>`;
   }
 
-  const dirLabel = game.direction==='next' ? 'Abzüge →' : 'Abzüge ←';
+  const dirLabel = game30.direction==='next' ? 'Abzüge →' : 'Abzüge ←';
   const modeLabel = isInit
     ? `Eröffnungsrunde · Startleben würfeln`
-    : (game.zeroRule
-      ? `Zug ${game.turn} · Ende bei ${game.zeroLimit} unter 0 (aktuell ${underZeroCount()})`
-      : `Zug ${game.turn} · ${livingCount()} von ${game.players.length} übrig`);
+    : (game30.zeroRule
+      ? `Zug ${game30.turn} · Ende bei ${game30.zeroLimit} unter 0 (aktuell ${underZeroCount30()})`
+      : `Zug ${game30.turn} · ${livingCount30()} von ${game30.players.length} übrig`);
 
   app.innerHTML = `
-    ${brandTitle(`${game.target}er&#8209;Spiel`)}
+    ${brandTitle(`${game30.target}er&#8209;Spiel`)}
     <div class="sub">${modeLabel} · ${dirLabel}</div>
-    ${game.msg?`<div class="banner ${game.msg.type}">${game.msg.text}${game.msg.quip?`<span class="quip">${game.msg.quip}</span>`:''}</div>`:''}
+    ${game30.msg?`<div class="banner ${game30.msg.type}">${game30.msg.text}${game30.msg.quip?`<span class="quip">${game30.msg.quip}</span>`:''}</div>`:''}
     ${action}
     <div class="panel"><h2>Am Tisch</h2>${cards}</div>
-    ${logHTML()}
+    ${logHTML30()}
     <div class="toolbar">
-      <button class="btn-ghost" onclick="undo()" ${history.length?'':'disabled'}>↩ Rückgängig</button>
-      ${game.zeroRule?'<button class="btn-ghost" onclick="endZeroGame()">🏁 Beenden</button>':''}
-      <button class="btn-ghost" onclick="confirmReset()">Neues Spiel</button>
+      <button class="btn-ghost" onclick="undo30()" ${history30.length?'':'disabled'}>↩ Rückgängig</button>
+      ${game30.zeroRule?'<button class="btn-ghost" onclick="endZeroGame30()">🏁 Beenden</button>':''}
+      <button class="btn-ghost" onclick="confirmReset30()">Neues Spiel</button>
     </div>
   `;
 }
 
-function endZeroGame(){
+function endZeroGame30(){
   if(confirm('Spiel beenden und Rangliste anzeigen?')){
-    game.phase='ranking';
-    if(!game.winnerRecorded){ const top=[...game.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin(top.name); addLog(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game.winnerRecorded=true; }
+    game30.phase='ranking';
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; }
     render();
   }
 }
 
-function bigHitLine(){
-  if(!game.biggestHit) return '';
-  const b = game.biggestHit;
+function bigHitLine30(){
+  if(!game30.biggestHit) return '';
+  const b = game30.biggestHit;
   return `<div class="stat">💥 Grösster Schlag: ${esc(b.attacker)} → ${esc(b.victim)} (−${b.dmg})</div>`;
 }
 
-function renderRanking(){
-  const sorted = [...game.players].sort((a,b)=>b.lives-a.lives);
+function renderRanking30(){
+  const sorted = [...game30.players].sort((a,b)=>b.lives-a.lives);
   const rows = sorted.map((p,i)=>`
     <div class="rank-item">
       <span class="pos">${i+1}.</span>
@@ -723,59 +929,304 @@ function renderRanking(){
       <span class="l ${p.lives<0?'neg':''}">${p.lives}</span>
     </div>`).join('');
   app.innerHTML = `
-    ${brandTitle(`${game.target}er&#8209;Spiel`)}
+    ${brandTitle(`${game30.target}er&#8209;Spiel`)}
     <div class="panel winner">
       <div class="crown">👑</div>
       <div class="wname">${esc(sorted[0].name)}</div>
-      <p>gewinnt nach ${game.turn} Zügen!</p>
-      ${bigHitLine()}
+      <p>gewinnt nach ${game30.turn} Zügen!</p>
+      ${bigHitLine30()}
       ${rows}
       <div style="height:12px"></div>
-      <button class="btn-primary btn-wide" onclick="rematch()">Revanche (gleiche Runde)</button>
+      <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
       <div style="height:8px"></div>
-      <button class="btn-ghost btn-wide" onclick="fullReset()">Neue Spieler</button>
+      <button class="btn-ghost btn-wide" onclick="fullReset30()">Neue Spieler</button>
     </div>
   `;
 }
 
-function renderWinner(){
-  const w = game.players.find(p=>p.alive);
+function renderWinner30(){
+  const w = game30.players.find(p=>p.alive);
   app.innerHTML = `
-    ${brandTitle(`${game.target}er&#8209;Spiel`)}
+    ${brandTitle(`${game30.target}er&#8209;Spiel`)}
     <div class="panel winner">
       <div class="crown">👑</div>
       <div class="wname">${esc(w?w.name:'—')}</div>
-      <p>gewinnt nach ${game.turn} Zügen mit ${w?w.lives:0} verbleibenden Leben!</p>
-      ${bigHitLine()}
-      <button class="btn-primary btn-wide" onclick="rematch()">Revanche (gleiche Runde)</button>
+      <p>gewinnt nach ${game30.turn} Zügen mit ${w?w.lives:0} verbleibenden Leben!</p>
+      ${bigHitLine30()}
+      <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
       <div style="height:8px"></div>
-      <button class="btn-ghost btn-wide" onclick="fullReset()">Neue Spieler</button>
+      <button class="btn-ghost btn-wide" onclick="fullReset30()">Neue Spieler</button>
     </div>
   `;
 }
 
-function rematch(){
-  game.players.forEach(p=>{ p.lives=null; p.alive=true; });
-  game.phase='init';
-  game.initIdx=0;
-  game.currentIdx=0;
-  game.attackNum=0; game.attackCount=0;
-  game.msg=null;
-  game.turn=1;
-  game.biggestHit=null;
-  game.winnerRecorded=false;
-  game.log=[];
-  history=[];
+function rematch30(){
+  game30.players.forEach(p=>{ p.lives=null; p.alive=true; });
+  game30.phase='init';
+  game30.initIdx=0;
+  game30.currentIdx=0;
+  game30.attackNum=0; game30.attackCount=0;
+  game30.msg=null;
+  game30.turn=1;
+  game30.biggestHit=null;
+  game30.winnerRecorded=false;
+  game30.log=[];
+  history30=[];
   render();
 }
-function confirmReset(){
-  if(confirm('Laufendes Spiel wirklich beenden?')) fullReset();
+function confirmReset30(){
+  if(confirm('Laufendes Spiel wirklich beenden?')) fullReset30();
 }
-function fullReset(){ setupPlayers=[]; game=null; history=[]; render(); }
+function fullReset30(){ setupPlayers30=[]; setupStep30=1; game30=null; history30=[]; currentGame=null; render(); }
 
-function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* ============================================================
+   TUTTO!  (rundenbasierte Punktetafel, neu im 30er-Look)
+   ============================================================ */
+const TUTTO_KEY = 'tutto-tracker-v2';
+const TUTTO_STATS_KEY = 'tutto-stats-v1';
+let gameTutto = null; // {players:[], target:6000, rounds:[[..]], finished:false}
+let lastFocusedTutto = null;
 
-function render(){ if(currentView==='scores') renderScores(); else (game ? renderGame() : renderSetup()); app.insertAdjacentHTML('afterbegin', tabsHTML()); }
+function loadTutto(){
+  try{
+    const raw = localStorage.getItem(TUTTO_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(s && s.players && s.players.length) gameTutto = s;
+  }catch(e){}
+}
+function saveTutto(){ try{ localStorage.setItem(TUTTO_KEY, JSON.stringify(gameTutto)); }catch(e){} }
+loadTutto();
+
+function loadStatsTutto(){
+  try{
+    const s = JSON.parse(localStorage.getItem(TUTTO_STATS_KEY));
+    if(s && typeof s==='object') return {players:s.players||{}};
+  }catch(e){}
+  return {players:{}};
+}
+let STATS_TUTTO = loadStatsTutto();
+function saveStatsTutto(){ try{ localStorage.setItem(TUTTO_STATS_KEY, JSON.stringify(STATS_TUTTO)); }catch(e){} }
+function statPlayerTutto(name){
+  if(!STATS_TUTTO.players[name]) STATS_TUTTO.players[name] = {wins:0, games:0};
+  return STATS_TUTTO.players[name];
+}
+
+function fmtNum(n){ return n.toLocaleString('de-CH'); }
+function totalsTutto(){
+  const t = gameTutto.players.map(()=>0);
+  gameTutto.rounds.forEach(r=>r.forEach((v,i)=>t[i]+=v));
+  return t;
+}
+
+/* ---------- Setup ---------- */
+let setupPlayersTutto = ['',''];
+function renderTutto(){
+  if(!gameTutto){ renderSetupTutto(); return; }
+  renderGameTutto();
+}
+
+function renderSetupTutto(){
+  const rows = setupPlayersTutto.map((name,i)=>`
+    <div class="row" style="margin-bottom:8px">
+      <input type="text" data-tp="${i}" value="${esc(name)}" placeholder="Spielername ${i+1}" maxlength="20" autocomplete="off">
+      <button class="btn-ghost" style="flex:none;padding:12px 14px" onclick="removeTuttoField(${i})" ${setupPlayersTutto.length<=2?'disabled':''} aria-label="Spieler entfernen">✕</button>
+    </div>`).join('');
+
+  app.innerHTML = `
+    ${brandTitle('Tutto!')}
+    <div class="sub">Punktetafel für den Würfeltisch</div>
+    <div class="panel">
+      <h2>Neues Spiel</h2>
+      ${rows}
+      <button class="btn-ghost btn-wide" onclick="addTuttoField()" ${setupPlayersTutto.length>=10?'disabled':''}>+ Spieler</button>
+      <label style="margin-top:14px">Zielpunktzahl</label>
+      <input type="number" id="tuttoTarget" value="${window._tuttoTarget||6000}" step="500" min="500" inputmode="numeric">
+      <div class="hint">Wer nach einer abgeschlossenen Runde die Zielpunktzahl erreicht hat, gewinnt.</div>
+    </div>
+    <button class="btn-primary btn-wide" onclick="startTutto()">Los geht's 🎲</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+  app.querySelectorAll('[data-tp]').forEach(inp=>{
+    inp.addEventListener('input', e=>{ setupPlayersTutto[+e.target.dataset.tp] = e.target.value; });
+  });
+  $('#tuttoTarget').addEventListener('input', e=>{ window._tuttoTarget = parseInt(e.target.value,10)||6000; });
+}
+function addTuttoField(){ if(setupPlayersTutto.length<10){ setupPlayersTutto.push(''); renderSetupTutto(); } }
+function removeTuttoField(i){ if(setupPlayersTutto.length>2){ setupPlayersTutto.splice(i,1); renderSetupTutto(); } }
+
+function startTutto(){
+  const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
+  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  let target = parseInt(($('#tuttoTarget')||{}).value, 10);
+  if(!target || target<500) target = 6000;
+  gameTutto = {players:names, target, rounds:[], finished:false};
+  names.forEach(n=>statPlayerTutto(n).games++);
+  saveStatsTutto();
+  saveTutto();
+  render();
+}
+
+/* ---------- Spielansicht ---------- */
+function renderGameTutto(){
+  const t = totalsTutto();
+  const order = gameTutto.players.map((p,i)=>({name:p, pts:t[i], idx:i})).sort((a,b)=>b.pts-a.pts);
+  const max = Math.max(gameTutto.target, order[0]?order[0].pts:0);
+  const standings = order.map((o,rank)=>{
+    const pct = Math.max(0, Math.min(100, (o.pts/max)*100));
+    return `
+    <div class="standing ${rank===0 && o.pts>0 ? 'leader':''}">
+      <div class="pos">${rank+1}</div>
+      <div style="flex:1;min-width:0">
+        <div class="name">${esc(o.name)}</div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+      </div>
+      <div class="pts">${fmtNum(o.pts)}</div>
+    </div>`;
+  }).join('');
+
+  const rn = gameTutto.rounds.length+1;
+  const entries = gameTutto.players.map((p,i)=>`
+    <div class="tutto-entry">
+      <div class="who">${esc(p)}</div>
+      <input type="number" step="50" inputmode="numeric" placeholder="0" data-tidx="${i}" id="tent${i}">
+    </div>`).join('');
+
+  const quickVals = [-1000,300,500,1000,2000];
+  const quick = quickVals.map(v=>`<button type="button" onclick="quickAddTutto(${v})">${v>0?'+':''}${fmtNum(v)}</button>`).join('');
+
+  let histRows = '';
+  gameTutto.rounds.forEach((r,ri)=>{
+    histRows += `<tr><td>${ri+1}</td>`;
+    r.forEach(v=>{ const cls = v<0?' class="neg"':(v===0?' class="zero"':''); histRows += `<td${cls}>${fmtNum(v)}</td>`; });
+    histRows += `</tr>`;
+  });
+  const totalsRow = `<tr><td>Total</td>${gameTutto.players.map((p,i)=>`<td>${fmtNum(t[i])}</td>`).join('')}</tr>`;
+  const headRow = `<th>Runde</th>${gameTutto.players.map(p=>`<th>${esc(p)}</th>`).join('')}`;
+
+  app.innerHTML = `
+    ${brandTitle('Tutto!')}
+    <div class="sub">Ziel: ${fmtNum(gameTutto.target)} Punkte</div>
+
+    <div class="panel"><h2>Rangliste</h2>${standings}</div>
+
+    <div class="panel">
+      <h2>${dieSVG(Math.min(((rn-1)%6)+1,6),false,'gold')} Runde ${rn}</h2>
+      <div class="quick">${quick}</div>
+      ${entries}
+      <button class="btn-primary btn-wide" onclick="commitRoundTutto()">Runde abschliessen</button>
+      <div class="hint">Minuspunkte (z.&nbsp;B. Strasse verpasst: −1000) einfach mit Minus eintragen. Leere Felder zählen als 0.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Verlauf</h2>
+      <div class="hist-scroll"><table>
+        <thead><tr>${headRow}</tr></thead>
+        <tbody>${histRows}</tbody>
+        <tfoot>${totalsRow}</tfoot>
+      </table></div>
+      <div class="toolbar">
+        <button class="btn-ghost" onclick="undoRoundTutto()" ${gameTutto.rounds.length?'':'disabled'}>↩ Letzte Runde</button>
+        <button class="btn-ghost" onclick="confirmResetTutto()">Neues Spiel</button>
+      </div>
+    </div>
+  `;
+  app.querySelectorAll('[data-tidx]').forEach(inp=>{
+    inp.addEventListener('focus', ()=>{ lastFocusedTutto = inp; });
+  });
+  checkWinTutto(false);
+}
+
+function quickAddTutto(v){
+  if(lastFocusedTutto){
+    const cur = parseInt(lastFocusedTutto.value,10)||0;
+    lastFocusedTutto.value = cur+v;
+    lastFocusedTutto.focus();
+  }
+}
+
+function commitRoundTutto(){
+  const inputs = document.querySelectorAll('[data-tidx]');
+  const round = []; let any=false;
+  inputs.forEach(inp=>{
+    let v = parseInt(inp.value,10);
+    if(isNaN(v)) v=0; else any=true;
+    round.push(v);
+  });
+  if(!any){ alert('Keine Punkte eingetragen.'); return; }
+  gameTutto.rounds.push(round);
+  saveTutto();
+  render();
+  checkWinTutto(true);
+}
+function undoRoundTutto(){
+  if(!gameTutto.rounds.length) return;
+  gameTutto.rounds.pop();
+  gameTutto.finished = false;
+  saveTutto();
+  render();
+}
+function confirmResetTutto(){
+  if(confirm('Spiel wirklich beenden und neu starten?')) resetTutto();
+}
+function resetTutto(){
+  const old = gameTutto;
+  gameTutto = null;
+  localStorage.removeItem(TUTTO_KEY);
+  setupPlayersTutto = old ? old.players.slice() : ['',''];
+  window._tuttoTarget = old ? old.target : 6000;
+  render();
+}
+function checkWinTutto(announce){
+  const t = totalsTutto();
+  let best=-1, bi=-1;
+  t.forEach((v,i)=>{ if(v>=gameTutto.target && v>best){ best=v; bi=i; } });
+  if(bi===-1) return;
+  if(announce || !gameTutto.finished){
+    gameTutto.finished = true;
+    statPlayerTutto(gameTutto.players[bi]).wins++;
+    saveStatsTutto();
+    saveTutto();
+    renderWinnerTutto(gameTutto.players[bi], best);
+  }
+}
+function renderWinnerTutto(name, score){
+  const overlay = document.createElement('div');
+  overlay.className = 'fx-overlay';
+  overlay.style.pointerEvents = 'auto';
+  overlay.style.background = 'rgba(24,28,38,.88)';
+  overlay.innerHTML = `
+    <div class="panel winner" style="max-width:340px;background:var(--ivory);color:var(--pip);pointer-events:auto">
+      <div class="crown">🎉</div>
+      <div class="wname" style="color:var(--red)">${esc(name)}</div>
+      <p style="color:var(--pip)">hat gewonnen mit <b>${fmtNum(score)}</b> Punkten</p>
+      <button class="btn-primary btn-wide" onclick="this.closest('.fx-overlay').remove();resetTutto()">Neues Spiel</button>
+      <div style="height:8px"></div>
+      <button class="btn-ghost btn-wide" onclick="this.closest('.fx-overlay').remove()">Weiterspielen</button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+function renderScoresTutto(){
+  const byWins = Object.entries(STATS_TUTTO.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
+  const empty = t => `<div class="hint">${t}</div>`;
+  app.innerHTML = `
+    ${brandTitle('Tutto!')}
+    <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    <div class="panel"><h2>🏆 Hall of Fame</h2>
+      ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
+    </div>
+    <button class="btn-ghost btn-wide" onclick="resetStatsTutto()">Statistiken zurücksetzen</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+}
+function resetStatsTutto(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_TUTTO={players:{}}; saveStatsTutto(); render(); } }
+
+/* ============================================================
+   START
+   ============================================================ */
 render();
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }
 </script>
