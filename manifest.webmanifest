@@ -1,7 +1,7 @@
 {
-  "name": "Würfeltafel – 30er & Tutto",
-  "short_name": "Würfeltafel",
-  "description": "Punkte- und Lebenspunkte-Tracker für 30er und Tutto",
+  "name": "Dice-Games – 30er & Tutto & Yatzy",
+  "short_name": "Dice-Games",
+  "description": "Punkte- und Lebenspunkte-Tracker für 30er-Spiel, Tutto und Yatzy",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
