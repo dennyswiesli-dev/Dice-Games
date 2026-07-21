@@ -119,6 +119,7 @@ button:disabled{opacity:.4;cursor:not-allowed}
 }
 .gamepick .pick-btn.p30 .icon{background:var(--gold);color:var(--pip)}
 .gamepick .pick-btn.ptutto .icon{background:var(--blue);color:var(--pip)}
+.gamepick .pick-btn.pyatzy .icon{background:var(--green);color:#fff}
 .gamepick .pick-btn .txt{flex:1;min-width:0}
 .gamepick .pick-btn .txt b{font-family:'Bungee',cursive;font-size:1.15rem;display:block;margin-bottom:3px;letter-spacing:.02em}
 .gamepick .pick-btn .txt span{font-size:.82rem;color:var(--ivory-dim);font-weight:600;line-height:1.4;display:block}
@@ -294,6 +295,21 @@ td.neg{color:#e8837a;font-weight:800}
 td.zero{color:var(--ivory-dim)}
 tfoot td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--gold)}
 
+/* ---------- Yatzy ---------- */
+.yatzy-table td.ycell{padding:4px 6px}
+.yatzy-table th.ycur{color:var(--gold)}
+.yatzy-table td.ycell input{
+  width:56px;padding:8px 4px;text-align:center;font-size:.95rem;border-radius:8px;
+  background:rgba(248,244,230,.9);color:var(--pip);font-weight:800;
+}
+.yatzy-table td.ycell input:disabled{background:rgba(248,244,230,.12);color:var(--ivory-dim);opacity:.6}
+.yatzy-table td.ycell .fixed{font-family:'Bungee',cursive;color:var(--ivory);font-size:1rem;display:inline-block;min-width:56px}
+.yatzy-table tr.ysection td{padding-top:12px;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--gold);font-weight:800;border-bottom:none}
+.yatzy-table tr.ybonus td{color:var(--gold);font-weight:800}
+.yatzy-table tr.ytotal td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--gold);font-size:.95rem}
+.ycat-name{display:block}
+.ycat-name small{display:block;font-weight:600;color:var(--ivory-dim);font-size:.68rem;margin-top:1px}
+
 @media (prefers-reduced-motion:reduce){
   *{animation:none!important;transition:none!important}
 }
@@ -322,6 +338,7 @@ function knownPlayerNames(){
   const names = new Set();
   try{ Object.keys((STATS30&&STATS30.players)||{}).forEach(n=>names.add(n)); }catch(e){}
   try{ Object.keys((STATS_TUTTO&&STATS_TUTTO.players)||{}).forEach(n=>names.add(n)); }catch(e){}
+  try{ Object.keys((STATS_YATZY&&STATS_YATZY.players)||{}).forEach(n=>names.add(n)); }catch(e){}
   return [...names].sort((a,b)=>a.localeCompare(b,'de'));
 }
 function nameDatalistHTML(id){
@@ -369,6 +386,10 @@ function renderGamePicker(){
         <span class="icon">🎯</span>
         <span class="txt"><b>Tutto!</b><span>Punktetafel · Runden würfeln, Punkte sammeln, Ziel erreichen</span></span>
       </button>
+      <button class="pick-btn pyatzy" onclick="chooseGame('yatzy')">
+        <span class="icon">🎰</span>
+        <span class="txt"><b>Yatzy</b><span>Punkteblock · 13 Kategorien, oberer Bonus, höchste Summe gewinnt</span></span>
+      </button>
     </div>
   `;
 }
@@ -396,6 +417,9 @@ function render(){
     app.insertAdjacentHTML('afterbegin', tabsHTML());
   } else if(currentGame==='tutto'){
     if(currentView==='scores') renderScoresTutto(); else renderTutto();
+    app.insertAdjacentHTML('afterbegin', tabsHTML());
+  } else if(currentGame==='yatzy'){
+    if(currentView==='scores') renderScoresYatzy(); else renderYatzy();
     app.insertAdjacentHTML('afterbegin', tabsHTML());
   }
 }
@@ -1462,6 +1486,448 @@ function renderScoresTutto(){
   `;
 }
 function resetStatsTutto(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_TUTTO={players:{}, bestRound:null, worstRound:null}; saveStatsTutto(); render(); } }
+
+/* ============================================================
+   YATZY  (Punkteblock, 13 Kategorien + oberer Bonus, im 30er-Look)
+   ============================================================ */
+const YATZY_KEY = 'yatzy-tracker-v1';
+const YATZY_STATS_KEY = 'yatzy-stats-v1';
+const PRESET_KEY_YATZY = 'yatzy-presets-v1';
+
+const YATZY_CATS = [
+  {id:'ones',    label:'Einser',        hint:'Summe aller Einser',            section:'upper'},
+  {id:'twos',    label:'Zweier',        hint:'Summe aller Zweier',            section:'upper'},
+  {id:'threes',  label:'Dreier',        hint:'Summe aller Dreier',            section:'upper'},
+  {id:'fours',   label:'Vierer',        hint:'Summe aller Vierer',            section:'upper'},
+  {id:'fives',   label:'Fünfer',        hint:'Summe aller Fünfer',            section:'upper'},
+  {id:'sixes',   label:'Sechser',       hint:'Summe aller Sechser',           section:'upper'},
+  {id:'threeK',  label:'Dreierpasch',   hint:'Summe aller Würfel',            section:'lower'},
+  {id:'fourK',   label:'Viererpasch',   hint:'Summe aller Würfel',            section:'lower'},
+  {id:'fullH',   label:'Full House',    hint:'Fix 25',                        section:'lower'},
+  {id:'smallS',  label:'Kleine Straße', hint:'Fix 30',                        section:'lower'},
+  {id:'largeS',  label:'Grosse Straße', hint:'Fix 40',                        section:'lower'},
+  {id:'yatzy',   label:'Yatzy',         hint:'Fix 50',                        section:'lower'},
+  {id:'chance',  label:'Chance',        hint:'Summe aller Würfel',            section:'lower'}
+];
+const UPPER_BONUS_THRESHOLD = 63;
+const UPPER_BONUS_VALUE = 35;
+
+let gameYatzy = null; // {players:[names], scores:[{catId:val|null}], currentIdx, startedAt, finished, log}
+let setupPlayersYatzy = ['',''];
+let setupStepYatzy = 1;
+let historyYatzy = [];
+
+function loadYatzy(){
+  try{
+    const raw = localStorage.getItem(YATZY_KEY);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    if(s && s.players && s.players.length) gameYatzy = s;
+  }catch(e){}
+}
+function saveYatzy(){ try{ localStorage.setItem(YATZY_KEY, JSON.stringify(gameYatzy)); }catch(e){} }
+loadYatzy();
+
+function loadStatsYatzy(){
+  try{
+    const s = JSON.parse(localStorage.getItem(YATZY_STATS_KEY));
+    if(s && typeof s==='object') return {
+      players:s.players||{},
+      bestGame: s.bestGame || null,   // {name, total, d}
+      durations: s.durations || []
+    };
+  }catch(e){}
+  return {players:{}, bestGame:null, durations:[]};
+}
+let STATS_YATZY = loadStatsYatzy();
+function saveStatsYatzy(){ try{ localStorage.setItem(YATZY_STATS_KEY, JSON.stringify(STATS_YATZY)); }catch(e){} }
+function statPlayerYatzy(name){
+  if(!STATS_YATZY.players[name]) STATS_YATZY.players[name] = {wins:0, games:0, yatzyCount:0};
+  const p = STATS_YATZY.players[name];
+  if(p.yatzyCount===undefined) p.yatzyCount=0;
+  return p;
+}
+
+/* ---------- Presets ---------- */
+function loadPresetsYatzy(){
+  try{
+    const p = JSON.parse(localStorage.getItem(PRESET_KEY_YATZY));
+    if(Array.isArray(p)) return p;
+  }catch(e){}
+  return [];
+}
+let PRESETS_YATZY = loadPresetsYatzy();
+function savePresetsYatzy(){ try{ localStorage.setItem(PRESET_KEY_YATZY, JSON.stringify(PRESETS_YATZY)); }catch(e){} }
+function saveCurrentPresetYatzy(){
+  const nameInput = $('#presetNameInputYatzy');
+  const name = (nameInput && nameInput.value || '').trim();
+  if(!name){ if(nameInput) nameInput.focus(); return; }
+  const preset = {
+    name,
+    players: setupPlayersYatzy.filter(n=>n.trim()),
+    d: Date.now()
+  };
+  const idx = PRESETS_YATZY.findIndex(v=>v.name.toLowerCase()===name.toLowerCase());
+  if(idx>=0) PRESETS_YATZY[idx]=preset; else PRESETS_YATZY.push(preset);
+  PRESETS_YATZY = PRESETS_YATZY.slice(0,12);
+  savePresetsYatzy();
+  renderSetupYatzy();
+}
+function loadPresetYatzy(i){
+  const v = PRESETS_YATZY[i];
+  if(!v) return;
+  setupPlayersYatzy = v.players.slice();
+  while(setupPlayersYatzy.length<2) setupPlayersYatzy.push('');
+  setupStepYatzy = 2;
+  renderSetupYatzy();
+}
+function deletePresetYatzy(i){
+  const v = PRESETS_YATZY[i];
+  if(v && confirm(`Vorlage "${v.name}" löschen?`)){
+    PRESETS_YATZY.splice(i,1);
+    savePresetsYatzy();
+    renderSetupYatzy();
+  }
+}
+
+/* ---------- Punkte-Helfer ---------- */
+function upperSumYatzy(scores){
+  return YATZY_CATS.filter(c=>c.section==='upper').reduce((sum,c)=>sum+(scores[c.id]||0),0);
+}
+function upperBonusYatzy(scores){
+  return upperSumYatzy(scores) >= UPPER_BONUS_THRESHOLD ? UPPER_BONUS_VALUE : 0;
+}
+function totalYatzy(scores){
+  const upper = upperSumYatzy(scores) + upperBonusYatzy(scores);
+  const lower = YATZY_CATS.filter(c=>c.section==='lower').reduce((sum,c)=>sum+(scores[c.id]||0),0);
+  return upper + lower;
+}
+function isCompleteYatzy(scores){
+  return YATZY_CATS.every(c=>scores[c.id]!==null && scores[c.id]!==undefined);
+}
+
+/* ---------- Setup-Wizard (2 Schritte) ---------- */
+function renderYatzy(){
+  if(!gameYatzy){ renderSetupYatzy(); return; }
+  renderGameYatzy();
+}
+
+function renderSetupYatzy(){
+  const step = setupStepYatzy;
+  const titles = {1:'Spieler', 2:'Übersicht & Vorlagen'};
+
+  let body = '';
+  if(step===1){
+    const rows = setupPlayersYatzy.map((name,i)=>`
+      <div class="row" style="margin-bottom:8px;align-items:center">
+        <input type="text" data-yp="${i}" value="${esc(name)}" placeholder="Spielername ${i+1}" maxlength="20" autocomplete="off" list="playerNamesListYatzy">
+        <div class="reorder">
+          <button class="btn-ghost" style="padding:4px 8px" onclick="moveYatzyField(${i},-1)" ${i===0?'disabled':''} aria-label="Spieler nach oben">▲</button>
+          <button class="btn-ghost" style="padding:4px 8px" onclick="moveYatzyField(${i},1)" ${i===setupPlayersYatzy.length-1?'disabled':''} aria-label="Spieler nach unten">▼</button>
+        </div>
+        <button class="btn-ghost" style="flex:none;padding:12px 14px" onclick="removeYatzyField(${i})" ${setupPlayersYatzy.length<=2?'disabled':''} aria-label="Spieler entfernen">✕</button>
+      </div>`).join('');
+
+    const presetList = PRESETS_YATZY.length ? `
+      <div class="panel">
+        <h2>Vorlage laden</h2>
+        ${PRESETS_YATZY.map((v,i)=>`
+          <div class="preset-item">
+            <div class="pn"><b>${esc(v.name)}</b><small>${v.players.map(esc).join(', ')}</small></div>
+            <div class="pbtns">
+              <button class="btn-ivory" onclick="loadPresetYatzy(${i})">Laden</button>
+              <button class="btn-ghost" onclick="deletePresetYatzy(${i})" aria-label="Vorlage löschen">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>` : '';
+
+    body = `
+      ${presetList}
+      <div class="panel">
+        <h2>Neues Spiel</h2>
+        ${rows}
+        <button class="btn-ghost btn-wide" onclick="addYatzyField()" ${setupPlayersYatzy.length>=8?'disabled':''}>+ Spieler</button>
+        <div class="hint">Spieler in Sitzreihenfolge eintragen. Mit ▲▼ lässt sich die Reihenfolge nachträglich anpassen. Oberer Bonus: ${UPPER_BONUS_VALUE} Punkte ab ${UPPER_BONUS_THRESHOLD} in Einser–Sechser.</div>
+      </div>
+      ${nameDatalistHTML('playerNamesListYatzy')}
+    `;
+  } else {
+    const names = setupPlayersYatzy.map(n=>n.trim()).filter(Boolean);
+    body = `
+      <div class="panel">
+        <h2>Übersicht</h2>
+        <div class="hint" style="margin:0 0 10px">Yahtzee-Style · 13 Kategorien · oberer Bonus ab ${UPPER_BONUS_THRESHOLD}</div>
+        ${names.map((n,i)=>`<div class="setup-item"><span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span><span class="n">${esc(n)}</span></div>`).join('')}
+      </div>
+      <div class="panel">
+        <h2>Als Vorlage speichern</h2>
+        <div class="hint" style="margin:0 0 10px">Speichert die Spieler unter einem Namen — praktisch für den nächsten Spieleabend.</div>
+        <div class="row">
+          <input type="text" id="presetNameInputYatzy" maxlength="24" placeholder="z. B. Stammtisch" autocomplete="off">
+          <button class="btn-ivory" onclick="saveCurrentPresetYatzy()" style="flex:none">Speichern</button>
+        </div>
+      </div>
+    `;
+  }
+
+  app.innerHTML = `
+    ${brandTitle('Yatzy')}
+    <div class="sub">Punkteblock für den Würfeltisch</div>
+    <div class="stepbar">Schritt <b>${step}</b> von 2 · ${titles[step]}</div>
+    ${body}
+    <div class="wizard-nav">
+      ${step>1 ? `<button class="btn-ghost" onclick="setupStepYatzy--;renderSetupYatzy()">← Zurück</button>` : `<button class="btn-ghost" onclick="backToPicker()">← Spielauswahl</button>`}
+      ${step<2
+        ? `<button class="btn-primary" onclick="setupNextYatzy()">Weiter →</button>`
+        : `<button class="btn-primary" onclick="startYatzy()">Los geht's 🎲</button>`}
+    </div>
+  `;
+  if(step===1){
+    app.querySelectorAll('[data-yp]').forEach(inp=>{
+      inp.addEventListener('input', e=>{ setupPlayersYatzy[+e.target.dataset.yp] = e.target.value; });
+    });
+  }
+}
+function setupNextYatzy(){
+  const names = setupPlayersYatzy.map(n=>n.trim()).filter(Boolean);
+  if(names.length<1){ alert('Mindestens einen Spieler eintragen.'); return; }
+  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  setupStepYatzy++;
+  renderSetupYatzy();
+}
+function addYatzyField(){ if(setupPlayersYatzy.length<8){ setupPlayersYatzy.push(''); renderSetupYatzy(); } }
+function removeYatzyField(i){ if(setupPlayersYatzy.length>2){ setupPlayersYatzy.splice(i,1); renderSetupYatzy(); } }
+function moveYatzyField(i, dir){
+  const j = i+dir;
+  if(j<0 || j>=setupPlayersYatzy.length) return;
+  [setupPlayersYatzy[i], setupPlayersYatzy[j]] = [setupPlayersYatzy[j], setupPlayersYatzy[i]];
+  renderSetupYatzy();
+}
+
+function startYatzy(){
+  const names = setupPlayersYatzy.map(n=>n.trim()).filter(Boolean);
+  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  const scores = names.map(()=>{
+    const s = {}; YATZY_CATS.forEach(c=>s[c.id]=null); return s;
+  });
+  gameYatzy = {
+    players:names, scores, currentIdx:0,
+    startedAt:Date.now(), durationSec:null,
+    finished:false, winnerRecorded:false, log:[]
+  };
+  names.forEach(n=>statPlayerYatzy(n).games++);
+  saveStatsYatzy();
+  saveYatzy();
+  addLogYatzy(`Spiel gestartet: ${names.map(n=>`<b>${esc(n)}</b>`).join(', ')}.`, 'round');
+  keepAwake();
+  render();
+}
+
+function addLogYatzy(html, cls){ if(gameYatzy){ gameYatzy.log = gameYatzy.log || []; gameYatzy.log.unshift({html, cls:cls||''}); if(gameYatzy.log.length>80) gameYatzy.log.pop(); } }
+function logHTMLYatzy(){
+  if(!gameYatzy || !gameYatzy.log || !gameYatzy.log.length) return '';
+  return `<details class="panel gamelog" open><summary>Protokoll</summary><ul class="log-list">${gameYatzy.log.map(l=>`<li class="${l.cls}">${l.html}</li>`).join('')}</ul></details>`;
+}
+
+/* ---------- Spielansicht: Score-Sheet ---------- */
+function renderGameYatzy(){
+  if(gameYatzy.finished){ renderWinnerScreenYatzy(); return; }
+  const cur = gameYatzy.players[gameYatzy.currentIdx];
+  const upperRows = YATZY_CATS.filter(c=>c.section==='upper');
+  const lowerRows = YATZY_CATS.filter(c=>c.section==='lower');
+
+  function catRow(c){
+    const cells = gameYatzy.players.map((p,pi)=>{
+      const val = gameYatzy.scores[pi][c.id];
+      const filled = val!==null && val!==undefined;
+      const isActivePlayer = pi===gameYatzy.currentIdx && !gameYatzy.finished;
+      if(filled){
+        return `<td class="ycell"><span class="fixed">${val}</span></td>`;
+      }
+      if(isActivePlayer){
+        return `<td class="ycell"><input type="number" inputmode="numeric" min="0" data-ycat="${c.id}" data-yidx="${pi}" placeholder="–" onchange="submitYatzyScore('${c.id}',${pi},this.value)"></td>`;
+      }
+      return `<td class="ycell"><input type="number" disabled placeholder="–"></td>`;
+    }).join('');
+    return `<tr><td><span class="ycat-name">${c.label}<small>${c.hint}</small></span></td>${cells}</tr>`;
+  }
+
+  const upperSumCells = gameYatzy.players.map((p,pi)=>`<td>${upperSumYatzy(gameYatzy.scores[pi])}</td>`).join('');
+  const bonusCells = gameYatzy.players.map((p,pi)=>{
+    const sum = upperSumYatzy(gameYatzy.scores[pi]);
+    const bonus = upperBonusYatzy(gameYatzy.scores[pi]);
+    const remaining = Math.max(0, UPPER_BONUS_THRESHOLD - sum);
+    return `<td>${bonus>0?`+${bonus}`:(remaining>0?`<span style="color:var(--ivory-dim);font-weight:600;font-size:.68rem">noch ${remaining}</span>`:'0')}</td>`;
+  }).join('');
+  const totalCells = gameYatzy.players.map((p,pi)=>`<td>${totalYatzy(gameYatzy.scores[pi])}</td>`).join('');
+
+  const headRow = `<th>Kategorie</th>${gameYatzy.players.map((p,pi)=>`<th class="${pi===gameYatzy.currentIdx&&!gameYatzy.finished?'ycur':''}">${esc(p)}${pi===gameYatzy.currentIdx&&!gameYatzy.finished?' 🎲':''}</th>`).join('')}`;
+
+  app.innerHTML = `
+    ${brandTitle('Yatzy')}
+    <div class="sub">${gameYatzy.finished ? 'Spiel beendet' : `${esc(cur)} ist am Zug`}</div>
+
+    <div class="panel">
+      <div class="hist-scroll"><table class="yatzy-table">
+        <thead><tr>${headRow}</tr></thead>
+        <tbody>
+          ${upperRows.map(catRow).join('')}
+          <tr class="ysection"><td colspan="${gameYatzy.players.length+1}">Oberer Block</td></tr>
+          <tr><td>Summe oben</td>${upperSumCells}</tr>
+          <tr class="ybonus"><td>Bonus (ab ${UPPER_BONUS_THRESHOLD})</td>${bonusCells}</tr>
+          <tr class="ysection"><td colspan="${gameYatzy.players.length+1}">Unterer Block</td></tr>
+          ${lowerRows.map(catRow).join('')}
+          <tr class="ytotal"><td>Total</td>${totalCells}</tr>
+        </tbody>
+      </table></div>
+      <div class="hint">Feld antippen und Punktzahl eintragen. 0 einzutragen ist erlaubt (Kategorie verstrichen). Es ist immer nur der aktuelle Spieler dran.</div>
+    </div>
+
+    ${logHTMLYatzy()}
+    <div class="toolbar">
+      <button class="btn-ghost" onclick="undoYatzy()" ${historyYatzy.length?'':'disabled'}>↩ Rückgängig</button>
+      <button class="btn-ghost" onclick="confirmResetYatzy()">Neues Spiel</button>
+    </div>
+  `;
+}
+
+function snapshotYatzy(){ historyYatzy.push(JSON.stringify(gameYatzy)); if(historyYatzy.length>60) historyYatzy.shift(); }
+function undoYatzy(){
+  if(!historyYatzy.length) return;
+  gameYatzy = JSON.parse(historyYatzy.pop());
+  saveYatzy();
+  render();
+}
+
+function nextActiveIdxYatzy(from){
+  const n = gameYatzy.players.length;
+  for(let s=1;s<=n;s++){
+    const i=(from+s)%n;
+    if(!isCompleteYatzy(gameYatzy.scores[i])) return i;
+  }
+  return from;
+}
+
+function submitYatzyScore(catId, playerIdx, rawVal){
+  const val = parseInt(rawVal, 10);
+  if(isNaN(val) || val<0){ render(); return; }
+  snapshotYatzy();
+  gameYatzy.scores[playerIdx][catId] = val;
+  const catLabel = YATZY_CATS.find(c=>c.id===catId).label;
+  addLogYatzy(`<b>${esc(gameYatzy.players[playerIdx])}</b> trägt bei <b>${catLabel}</b>: <b>${val}</b> ein.`);
+  if(catId==='yatzy' && val>0){
+    statPlayerYatzy(gameYatzy.players[playerIdx]).yatzyCount++;
+    saveStatsYatzy();
+  }
+
+  if(isCompleteYatzy(gameYatzy.scores[playerIdx]) && gameYatzy.players.every((p,pi)=>isCompleteYatzy(gameYatzy.scores[pi]))){
+    finishYatzy();
+  } else {
+    gameYatzy.currentIdx = nextActiveIdxYatzy(playerIdx);
+  }
+  saveYatzy();
+  render();
+}
+
+function finishYatzy(){
+  gameYatzy.finished = true;
+  const secs = gameYatzy.startedAt ? Math.max(1, Math.round((Date.now()-gameYatzy.startedAt)/1000)) : null;
+  if(secs){
+    gameYatzy.durationSec = secs;
+    STATS_YATZY.durations.push(secs);
+    STATS_YATZY.durations = STATS_YATZY.durations.slice(-200);
+  }
+  if(!gameYatzy.winnerRecorded){
+    const totals = gameYatzy.players.map((p,pi)=>totalYatzy(gameYatzy.scores[pi]));
+    let best=-1, bi=-1;
+    totals.forEach((t,i)=>{ if(t>best){ best=t; bi=i; } });
+    const winnerName = gameYatzy.players[bi];
+    statPlayerYatzy(winnerName).wins++;
+    if(!STATS_YATZY.bestGame || best > STATS_YATZY.bestGame.total){
+      STATS_YATZY.bestGame = {name:winnerName, total:best, d:Date.now()};
+    }
+    gameYatzy.winnerRecorded = true;
+    addLogYatzy(`🏆 <b>${esc(winnerName)}</b> gewinnt mit ${best} Punkten.`, 'round');
+  }
+  saveStatsYatzy();
+}
+
+function confirmResetYatzy(){
+  if(confirm('Laufendes Spiel wirklich beenden?')) fullResetYatzy();
+}
+function fullResetYatzy(){
+  setupPlayersYatzy=['','']; setupStepYatzy=1;
+  gameYatzy=null; historyYatzy=[];
+  localStorage.removeItem(YATZY_KEY);
+  currentGame=null;
+  render();
+}
+function rematchYatzy(){
+  const names = gameYatzy.players.slice();
+  const scores = names.map(()=>{ const s={}; YATZY_CATS.forEach(c=>s[c.id]=null); return s; });
+  gameYatzy = {
+    players:names, scores, currentIdx:0,
+    startedAt:Date.now(), durationSec:null,
+    finished:false, winnerRecorded:false, log:[]
+  };
+  names.forEach(n=>statPlayerYatzy(n).games++);
+  saveStatsYatzy();
+  historyYatzy=[];
+  saveYatzy();
+  addLogYatzy(`Neue Runde gestartet: ${names.map(n=>`<b>${esc(n)}</b>`).join(', ')}.`, 'round');
+  render();
+}
+
+/* ---------- Sieger-Bildschirm ---------- */
+function renderWinnerScreenYatzy(){
+  const totals = gameYatzy.players.map((p,pi)=>({name:p, total:totalYatzy(gameYatzy.scores[pi])}));
+  const sorted = [...totals].sort((a,b)=>b.total-a.total);
+  const rows = sorted.map((o,i)=>`
+    <div class="rank-item">
+      <span class="pos">${i+1}.</span>
+      <span class="n">${i===0?'👑 ':''}${esc(o.name)}</span>
+      <span class="l">${o.total}</span>
+    </div>`).join('');
+  app.innerHTML = `
+    ${brandTitle('Yatzy')}
+    <div class="panel winner">
+      <div class="crown">👑</div>
+      <div class="wname">${esc(sorted[0].name)}</div>
+      <p>gewinnt mit ${sorted[0].total} Punkten!</p>
+      ${gameYatzy.durationSec ? `<div class="stat">⏱ Spieldauer: ${fmtDuration(gameYatzy.durationSec)}</div>` : ''}
+      ${rows}
+    </div>
+    <button class="btn-primary btn-wide" onclick="rematchYatzy()">Revanche (gleiche Runde)</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="fullResetYatzy()">Neues Spiel</button>
+  `;
+}
+
+/* ---------- Scores ---------- */
+function renderScoresYatzy(){
+  const byWins = Object.entries(STATS_YATZY.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
+  const byYatzy = Object.entries(STATS_YATZY.players).filter(([,v])=>v.yatzyCount>0).sort((a,b)=>b[1].yatzyCount-a[1].yatzyCount).slice(0,10);
+  const empty = t => `<div class="hint">${t}</div>`;
+  const avgDur = STATS_YATZY.durations.length ? STATS_YATZY.durations.reduce((a,b)=>a+b,0)/STATS_YATZY.durations.length : null;
+  app.innerHTML = `
+    ${brandTitle('Yatzy')}
+    <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
+    ${avgDur ? `<div class="panel"><h2>⏱ Spieldauer</h2><div class="hint" style="margin:0">Ø ${fmtDuration(avgDur)} über ${STATS_YATZY.durations.length} beendete${STATS_YATZY.durations.length===1?'s':''} Spiel${STATS_YATZY.durations.length===1?'':'e'}.</div></div>` : ''}
+    <div class="panel"><h2>🏆 Hall of Fame</h2>
+      ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
+    </div>
+    <div class="panel"><h2>🎰 Meiste Yatzys</h2>
+      ${byYatzy.length ? `<ol class="score-list">${byYatzy.map(([n,v])=>`<li><span class="val">${v.yatzyCount}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch kein Yatzy gewürfelt.')}
+    </div>
+    <div class="panel"><h2>🚀 Höchste Punktzahl</h2>
+      ${STATS_YATZY.bestGame ? `<div class="score-list"><div class="standing"><span class="pos">🥇</span><span class="name">${esc(STATS_YATZY.bestGame.name)}</span><span class="pts" style="color:var(--pip)">${STATS_YATZY.bestGame.total}</span></div></div><div class="hint" style="margin-top:4px">${fmtDate(STATS_YATZY.bestGame.d)}</div>` : empty('Noch keine Partie beendet.')}
+    </div>
+    <button class="btn-ghost btn-wide" onclick="resetStatsYatzy()">Statistiken zurücksetzen</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+}
+function resetStatsYatzy(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_YATZY={players:{}, bestGame:null, durations:[]}; saveStatsYatzy(); render(); } }
 
 /* ============================================================
    START
