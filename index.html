@@ -56,6 +56,18 @@ body{
   padding:16px 14px 40px;
 }
 .app{width:100%;max-width:420px}
+@media (min-width:640px){
+  html{font-size:18px}
+  .app{max-width:560px}
+  .die{width:52px;height:52px}
+  .die.big{width:86px;height:86px}
+}
+@media (min-width:1000px){
+  html{font-size:20px}
+  .app{max-width:680px}
+  .die{width:58px;height:58px}
+  .die.big{width:96px;height:96px}
+}
 h1{
   font-family:'Bungee',cursive;
   font-size:clamp(1.7rem,8vw,2.3rem);
