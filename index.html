@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5">
 <title>Dice-Games</title>
 <meta name="description" content="Punkte- und Lebenspunkte-Tracker für 30er-Spiel, Tutto und Yatzy — direkt im Browser, kein Konto nötig.">
 
@@ -407,6 +407,55 @@ function playFX(kind, text){
   document.body.appendChild(ov); setTimeout(()=>ov.remove(),2600);
 }
 
+/* ---------- Eigene Dialoge (ersetzen confirm()/alert()) ---------- */
+function closeModal(){ const m=$('#modalOverlay'); if(m) m.remove(); }
+function showConfirm(text, onYes){
+  closeModal();
+  const ov=document.createElement('div');
+  ov.className='fx-overlay'; ov.id='modalOverlay';
+  ov.style.pointerEvents='auto'; ov.style.background='rgba(24,28,38,.88)';
+  ov.innerHTML = `
+    <div class="panel winner" style="max-width:340px;background:var(--ivory);color:var(--pip);pointer-events:auto;text-align:center">
+      <p style="color:var(--pip);font-weight:700;margin-bottom:18px">${esc(text)}</p>
+      <div class="row">
+        <button class="btn-ghost" id="modalNo" style="border-color:rgba(34,32,28,.3);color:var(--pip)">Abbrechen</button>
+        <button class="btn-primary" id="modalYes">Ja, weiter</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  $('#modalNo').onclick = closeModal;
+  $('#modalYes').onclick = ()=>{ closeModal(); onYes(); };
+}
+function showAlert(text){
+  closeModal();
+  const ov=document.createElement('div');
+  ov.className='fx-overlay'; ov.id='modalOverlay';
+  ov.style.pointerEvents='auto'; ov.style.background='rgba(24,28,38,.88)';
+  ov.innerHTML = `
+    <div class="panel winner" style="max-width:340px;background:var(--ivory);color:var(--pip);pointer-events:auto;text-align:center">
+      <p style="color:var(--pip);font-weight:700;margin-bottom:18px">${esc(text)}</p>
+      <button class="btn-primary btn-wide" id="modalOk">OK</button>
+    </div>`;
+  document.body.appendChild(ov);
+  $('#modalOk').onclick = closeModal;
+}
+
+/* ---------- Speicher-Status (localStorage kann in Privatmodus/voll fehlschlagen) ---------- */
+function safeSetItem(key, value){
+  try{ localStorage.setItem(key, value); return true; }
+  catch(e){ showStorageWarning(); return false; }
+}
+let storageWarningShown = false;
+function showStorageWarning(){
+  if(storageWarningShown) return;
+  storageWarningShown = true;
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;left:12px;right:12px;bottom:12px;z-index:200;background:var(--red-dark);color:#fff;padding:12px 14px;border-radius:10px;font-weight:700;font-size:.85rem;box-shadow:var(--shadow)';
+  el.textContent = '⚠️ Speichern fehlgeschlagen — Änderungen bleiben evtl. nicht erhalten (privater Modus oder Speicher voll).';
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 5000);
+}
+
 /* ---------- Bildschirm-Wachhalten (Wake Lock) ---------- */
 let wakeLock = null;
 async function keepAwake(){
@@ -495,7 +544,7 @@ function loadPresets30(){
   return [];
 }
 let PRESETS30 = loadPresets30();
-function savePresets30(){ try{ localStorage.setItem(PRESET_KEY_30, JSON.stringify(PRESETS30)); }catch(e){} }
+function savePresets30(){ safeSetItem(PRESET_KEY_30, JSON.stringify(PRESETS30)); }
 
 function saveCurrentPreset30(){
   const nameInput = $('#presetNameInput');
@@ -523,11 +572,11 @@ function loadPreset30(i){
 }
 function deletePreset30(i){
   const v = PRESETS30[i];
-  if(v && confirm(`Vorlage "${v.name}" löschen?`)){
+  if(v) showConfirm(`Vorlage "${v.name}" löschen?`, ()=>{
     PRESETS30.splice(i,1);
     savePresets30();
     renderSetup30();
-  }
+  });
 }
 
 /* ---------- Statistiken ---------- */
@@ -538,7 +587,7 @@ function loadStats30(){
   }catch(e){}
   return {players:{}, steals:[], rolls:[], durations:[]};
 }
-function saveStats30(){ try{ localStorage.setItem(STATS_KEY_30, JSON.stringify(STATS30)); }catch(e){} }
+function saveStats30(){ safeSetItem(STATS_KEY_30, JSON.stringify(STATS30)); }
 function statPlayer30(name){
   if(!STATS30.players[name]) STATS30.players[name] = {wins:0, deaths:0, games:0};
   return STATS30.players[name];
@@ -634,7 +683,7 @@ function showH2H30(){
     ]
   });
 }
-function resetStats30(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS30={players:{},steals:[],rolls:[],durations:[]}; saveStats30(); render(); } }
+function resetStats30(){ showConfirm('Wirklich alle Statistiken löschen?', ()=>{ STATS30={players:{},steals:[],rolls:[],durations:[]}; saveStats30(); render(); }); }
 
 function snapshot30(){ history30.push(JSON.stringify(game30)); if(history30.length>60) history30.shift(); }
 function undo30(){
@@ -900,7 +949,7 @@ function submitSum30(sum){
 }
 
 function changeAttackCount30(d){
-  game30.attackCount = Math.max(0, (game30.attackCount||0)+d);
+  game30.attackCount = Math.max(0, Math.min(game30.dice, (game30.attackCount||0)+d));
   $('#atkval').textContent = game30.attackCount;
   $('#atkdmg').textContent = game30.attackCount * game30.attackNum;
 }
@@ -1051,11 +1100,11 @@ function render30(){
 }
 
 function endZeroGame30(){
-  if(confirm('Spiel beenden und Rangliste anzeigen?')){
+  showConfirm('Spiel beenden und Rangliste anzeigen?', ()=>{
     game30.phase='ranking';
     if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
-  }
+  });
 }
 
 function bigHitLine30(){
@@ -1140,7 +1189,7 @@ function rematch30(){
   render();
 }
 function confirmReset30(){
-  if(confirm('Laufendes Spiel wirklich beenden?')) fullReset30();
+  showConfirm('Laufendes Spiel wirklich beenden?', fullReset30);
 }
 function fullReset30(){ setupPlayers30=[]; setupStep30=1; game30=null; history30=[]; currentGame=null; render(); }
 
@@ -1160,7 +1209,7 @@ function loadTutto(){
     if(s && s.players && s.players.length) gameTutto = s;
   }catch(e){}
 }
-function saveTutto(){ try{ localStorage.setItem(TUTTO_KEY, JSON.stringify(gameTutto)); }catch(e){} }
+function saveTutto(){ safeSetItem(TUTTO_KEY, JSON.stringify(gameTutto)); }
 loadTutto();
 
 function loadStatsTutto(){
@@ -1175,7 +1224,7 @@ function loadStatsTutto(){
   return {players:{}, bestRound:null, worstRound:null};
 }
 let STATS_TUTTO = loadStatsTutto();
-function saveStatsTutto(){ try{ localStorage.setItem(TUTTO_STATS_KEY, JSON.stringify(STATS_TUTTO)); }catch(e){} }
+function saveStatsTutto(){ safeSetItem(TUTTO_STATS_KEY, JSON.stringify(STATS_TUTTO)); }
 function statPlayerTutto(name){
   if(!STATS_TUTTO.players[name]) STATS_TUTTO.players[name] = {wins:0, games:0, streak:0, maxStreak:0, totalPoints:0, totalRounds:0};
   const p = STATS_TUTTO.players[name];
@@ -1231,7 +1280,7 @@ function loadPresetsTutto(){
   return [];
 }
 let PRESETS_TUTTO = loadPresetsTutto();
-function savePresetsTutto(){ try{ localStorage.setItem(PRESET_KEY_TUTTO, JSON.stringify(PRESETS_TUTTO)); }catch(e){} }
+function savePresetsTutto(){ safeSetItem(PRESET_KEY_TUTTO, JSON.stringify(PRESETS_TUTTO)); }
 
 function saveCurrentPresetTutto(){
   const nameInput = $('#presetNameInputTutto');
@@ -1260,11 +1309,11 @@ function loadPresetTutto(i){
 }
 function deletePresetTutto(i){
   const v = PRESETS_TUTTO[i];
-  if(v && confirm(`Vorlage "${v.name}" löschen?`)){
+  if(v) showConfirm(`Vorlage "${v.name}" löschen?`, ()=>{
     PRESETS_TUTTO.splice(i,1);
     savePresetsTutto();
     renderSetupTutto();
-  }
+  });
 }
 
 /* ---------- Setup-Wizard (2 Schritte) ---------- */
@@ -1356,7 +1405,7 @@ function renderSetupTutto(){
 }
 function setupNextTutto(){
   const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
-  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   setupStepTutto++;
   renderSetupTutto();
 }
@@ -1371,7 +1420,7 @@ function moveTuttoField(i, dir){
 
 function startTutto(){
   const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
-  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   let target = window._tuttoTarget || parseInt((($('#tuttoTarget')||{}).value), 10);
   if(!target || target<500) target = 6000;
   gameTutto = {players:names, target, rounds:[], finished:false};
@@ -1467,7 +1516,7 @@ function commitRoundTutto(){
     if(isNaN(v)) v=0; else any=true;
     round.push(v);
   });
-  if(!any){ alert('Keine Punkte eingetragen.'); return; }
+  if(!any){ showAlert('Keine Punkte eingetragen.'); return; }
   gameTutto.rounds.push(round);
   recordRoundTutto(round, gameTutto.players);
   saveTutto();
@@ -1482,7 +1531,7 @@ function undoRoundTutto(){
   render();
 }
 function confirmResetTutto(){
-  if(confirm('Spiel wirklich beenden und neu starten?')) resetTutto();
+  showConfirm('Spiel wirklich beenden und neu starten?', resetTutto);
 }
 function resetTutto(){
   const old = gameTutto;
@@ -1579,7 +1628,7 @@ function showH2HTutto(){
     ]
   });
 }
-function resetStatsTutto(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_TUTTO={players:{}, bestRound:null, worstRound:null}; saveStatsTutto(); render(); } }
+function resetStatsTutto(){ showConfirm('Wirklich alle Statistiken löschen?', ()=>{ STATS_TUTTO={players:{}, bestRound:null, worstRound:null}; saveStatsTutto(); render(); }); }
 
 /* ============================================================
    YATZY  (Punkteblock, 13 Kategorien + oberer Bonus, im 30er-Look)
@@ -1620,7 +1669,7 @@ function loadYatzy(){
     if(s && s.players && s.players.length) gameYatzy = s;
   }catch(e){}
 }
-function saveYatzy(){ try{ localStorage.setItem(YATZY_KEY, JSON.stringify(gameYatzy)); }catch(e){} }
+function saveYatzy(){ safeSetItem(YATZY_KEY, JSON.stringify(gameYatzy)); }
 loadYatzy();
 
 function loadStatsYatzy(){
@@ -1635,7 +1684,7 @@ function loadStatsYatzy(){
   return {players:{}, bestGame:null, durations:[]};
 }
 let STATS_YATZY = loadStatsYatzy();
-function saveStatsYatzy(){ try{ localStorage.setItem(YATZY_STATS_KEY, JSON.stringify(STATS_YATZY)); }catch(e){} }
+function saveStatsYatzy(){ safeSetItem(YATZY_STATS_KEY, JSON.stringify(STATS_YATZY)); }
 function statPlayerYatzy(name){
   if(!STATS_YATZY.players[name]) STATS_YATZY.players[name] = {wins:0, games:0, yatzyCount:0};
   const p = STATS_YATZY.players[name];
@@ -1652,7 +1701,7 @@ function loadPresetsYatzy(){
   return [];
 }
 let PRESETS_YATZY = loadPresetsYatzy();
-function savePresetsYatzy(){ try{ localStorage.setItem(PRESET_KEY_YATZY, JSON.stringify(PRESETS_YATZY)); }catch(e){} }
+function savePresetsYatzy(){ safeSetItem(PRESET_KEY_YATZY, JSON.stringify(PRESETS_YATZY)); }
 function saveCurrentPresetYatzy(){
   const nameInput = $('#presetNameInputYatzy');
   const name = (nameInput && nameInput.value || '').trim();
@@ -1678,11 +1727,11 @@ function loadPresetYatzy(i){
 }
 function deletePresetYatzy(i){
   const v = PRESETS_YATZY[i];
-  if(v && confirm(`Vorlage "${v.name}" löschen?`)){
+  if(v) showConfirm(`Vorlage "${v.name}" löschen?`, ()=>{
     PRESETS_YATZY.splice(i,1);
     savePresetsYatzy();
     renderSetupYatzy();
-  }
+  });
 }
 
 /* ---------- Punkte-Helfer ---------- */
@@ -1785,8 +1834,8 @@ function renderSetupYatzy(){
 }
 function setupNextYatzy(){
   const names = setupPlayersYatzy.map(n=>n.trim()).filter(Boolean);
-  if(names.length<1){ alert('Mindestens einen Spieler eintragen.'); return; }
-  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  if(names.length<1){ showAlert('Mindestens einen Spieler eintragen.'); return; }
+  if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   setupStepYatzy++;
   renderSetupYatzy();
 }
@@ -1801,7 +1850,7 @@ function moveYatzyField(i, dir){
 
 function startYatzy(){
   const names = setupPlayersYatzy.map(n=>n.trim()).filter(Boolean);
-  if(names.length<2){ alert('Mindestens zwei Spieler eintragen.'); return; }
+  if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   const scores = names.map(()=>{
     const s = {}; YATZY_CATS.forEach(c=>s[c.id]=null); return s;
   });
@@ -1949,7 +1998,7 @@ function finishYatzy(){
 }
 
 function confirmResetYatzy(){
-  if(confirm('Laufendes Spiel wirklich beenden?')) fullResetYatzy();
+  showConfirm('Laufendes Spiel wirklich beenden?', fullResetYatzy);
 }
 function fullResetYatzy(){
   setupPlayersYatzy=['','']; setupStepYatzy=1;
@@ -2046,7 +2095,7 @@ function showH2HYatzy(){
     ]
   });
 }
-function resetStatsYatzy(){ if(confirm('Wirklich alle Statistiken löschen?')){ STATS_YATZY={players:{}, bestGame:null, durations:[]}; saveStatsYatzy(); render(); } }
+function resetStatsYatzy(){ showConfirm('Wirklich alle Statistiken löschen?', ()=>{ STATS_YATZY={players:{}, bestGame:null, durations:[]}; saveStatsYatzy(); render(); }); }
 
 /* ============================================================
    ERWEITERTE STATISTIK-ANSICHT: Kopf-an-Kopf & Gesamtübersicht
@@ -2173,8 +2222,56 @@ function renderOverallStats(){
         </div>`).join('')}
     </div>` : ''}
 
+    <div class="panel">
+      <h2>💾 Daten sichern</h2>
+      <div class="hint" style="margin:0 0 10px">Alle Statistiken und Vorlagen sind nur lokal auf diesem Gerät gespeichert. Exportiere sie als Datei, um sie zu sichern oder auf ein anderes Gerät zu übertragen.</div>
+      <div class="row">
+        <button class="btn-ivory" onclick="exportAllData()">⬇️ Exportieren</button>
+        <button class="btn-ivory" onclick="$('#importFile').click()">⬆️ Importieren</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importAllData(this.files[0])">
+    </div>
+
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
   `;
+}
+
+/* ---------- Export / Import aller lokalen Daten ---------- */
+const ALL_DATA_KEYS = [
+  STATS_KEY_30, PRESET_KEY_30,
+  TUTTO_KEY, TUTTO_STATS_KEY, PRESET_KEY_TUTTO,
+  YATZY_KEY, YATZY_STATS_KEY, PRESET_KEY_YATZY
+];
+function exportAllData(){
+  const data = {app:'Dice-Games', exportedAt:new Date().toISOString(), values:{}};
+  ALL_DATA_KEYS.forEach(k=>{ const v = localStorage.getItem(k); if(v!==null) data.values[k]=v; });
+  const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `dice-games-backup-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+function importAllData(file){
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    try{
+      const data = JSON.parse(reader.result);
+      if(!data || typeof data.values!=='object') throw new Error('invalid');
+      showConfirm('Import überschreibt alle vorhandenen lokalen Statistiken und Vorlagen. Fortfahren?', ()=>{
+        Object.entries(data.values).forEach(([k,v])=>{ if(ALL_DATA_KEYS.includes(k)) safeSetItem(k, v); });
+        STATS30 = loadStats30(); PRESETS30 = loadPresets30();
+        STATS_TUTTO = loadStatsTutto(); PRESETS_TUTTO = loadPresetsTutto(); loadTutto();
+        STATS_YATZY = loadStatsYatzy(); PRESETS_YATZY = loadPresetsYatzy(); loadYatzy();
+        render();
+        showAlert('Import abgeschlossen.');
+      });
+    }catch(e){ showAlert('Datei konnte nicht gelesen werden — ist es eine gültige Dice-Games-Sicherung?'); }
+    $('#importFile').value = '';
+  };
+  reader.readAsText(file);
 }
 
 /* ============================================================
