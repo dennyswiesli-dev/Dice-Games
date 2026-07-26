@@ -390,6 +390,26 @@ let currentView = 'play'; // play | scores (nur relevant, wenn ein Spiel aktiv i
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="Logo">${txt}</h1>`; }
 
+/* ---------- Spiele-Log (spielübergreifend, für Tages-Leaderboards) ---------- */
+const GAMELOG_KEY = 'dice-games-gamelog-v1';
+const GAME_LABELS = {'30er':'30er‑Spiel', 'tutto':'Tutto!', 'yatzy':'Yatzy'};
+function loadGameLog(){
+  try{ const a = JSON.parse(localStorage.getItem(GAMELOG_KEY)); if(Array.isArray(a)) return a; }catch(e){}
+  return [];
+}
+let GAME_LOG = loadGameLog();
+function saveGameLog(){ safeSetItem(GAMELOG_KEY, JSON.stringify(GAME_LOG)); }
+function addGameLogEntry(game, winner, players, extra){
+  GAME_LOG.unshift({game, winner, players, ts:Date.now(), ...(extra||{})});
+  GAME_LOG = GAME_LOG.slice(0,500);
+  saveGameLog();
+}
+function dayKey(ts){ const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function fmtDayLabel(key){
+  const [y,m,d] = key.split('-').map(Number);
+  return new Date(y,m-1,d).toLocaleDateString('de-CH', {weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
 /* ---------- Namens-Autovervollständigung ---------- */
 function knownPlayerNames(){
   const names = new Set();
@@ -454,7 +474,7 @@ function showAlert(text){
 
 /* ---------- Speicher-Status (localStorage kann in Privatmodus/voll fehlschlagen) ---------- */
 function safeSetItem(key, value){
-  try{ localStorage.setItem(key, value); return true; }
+  try{ localStorage.setItem(key, value); scheduleCloudPush(); return true; }
   catch(e){ showStorageWarning(); return false; }
 }
 let storageWarningShown = false;
@@ -466,6 +486,72 @@ function showStorageWarning(){
   el.textContent = '⚠️ Speichern fehlgeschlagen — Änderungen bleiben evtl. nicht erhalten (privater Modus oder Speicher voll).';
   document.body.appendChild(el);
   setTimeout(()=>el.remove(), 5000);
+}
+
+/* ---------- Cloud-Sync (Firebase Auth + Firestore, geräteübergreifend) ---------- */
+let cloudUser = null;
+let cloudPushTimer = null;
+
+function scheduleCloudPush(){
+  if(!cloudUser || !window.__fbPushData) return;
+  clearTimeout(cloudPushTimer);
+  cloudPushTimer = setTimeout(()=>{
+    const values = {};
+    ALL_DATA_KEYS.forEach(k=>{ const v = localStorage.getItem(k); if(v!==null) values[k]=v; });
+    window.__fbPushData(values).catch(e=>console.error('Cloud-Push fehlgeschlagen', e));
+  }, 1200);
+}
+
+function applyCloudValues(values){
+  if(!values) return;
+  ALL_DATA_KEYS.forEach(k=>{ if(typeof values[k]==='string') localStorage.setItem(k, values[k]); });
+  STATS30 = loadStats30(); PRESETS30 = loadPresets30();
+  STATS_TUTTO = loadStatsTutto(); PRESETS_TUTTO = loadPresetsTutto(); loadTutto();
+  STATS_YATZY = loadStatsYatzy(); PRESETS_YATZY = loadPresetsYatzy(); loadYatzy();
+  GAME_LOG = loadGameLog();
+}
+
+async function handleCloudAuthChange(user){
+  cloudUser = user;
+  if(user){
+    try{
+      const cloudValues = window.__fbPullData ? await window.__fbPullData() : null;
+      if(cloudValues && Object.keys(cloudValues).length){
+        applyCloudValues(cloudValues);
+      } else {
+        scheduleCloudPush(); // erster Login: lokale Daten als Cloud-Kopie anlegen
+      }
+    }catch(e){ console.error('Cloud-Sync fehlgeschlagen', e); showAlert('Cloud-Sync momentan nicht erreichbar. Die App funktioniert weiter lokal.'); }
+  }
+  render();
+}
+window.handleCloudAuthChange = handleCloudAuthChange;
+
+async function signInWithGoogle(){
+  if(!window.__fbSignIn){ showAlert('Cloud-Sync ist nicht konfiguriert (siehe README/Kommentar im Quellcode).'); return; }
+  try{ await window.__fbSignIn(); }
+  catch(e){ showAlert('Anmeldung fehlgeschlagen: '+(e&&e.message?e.message:e)); }
+}
+async function signOutOfGoogle(){
+  if(!window.__fbSignOut) return;
+  try{ await window.__fbSignOut(); }catch(e){}
+}
+function cloudStatusHTML(){
+  if(!window.__fbReady){
+    return `<div class="hint" style="text-align:center;margin:0 0 14px">☁️ Cloud-Sync ist nicht eingerichtet — Daten bleiben nur lokal auf diesem Gerät.</div>`;
+  }
+  if(cloudUser){
+    return `
+      <div class="panel" style="display:flex;align-items:center;gap:12px">
+        <img src="${esc(cloudUser.photoURL||'icon-192.png')}" alt="" style="width:40px;height:40px;border-radius:50%;flex:none;background:var(--ivory)">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cloudUser.displayName||cloudUser.email||'Angemeldet')}</div>
+          <div class="hint" style="margin:0">☁️ Cloud-Sync aktiv — Daten sind geräteübergreifend</div>
+        </div>
+        <button class="btn-ghost" style="flex:none" onclick="signOutOfGoogle()">Abmelden</button>
+      </div>`;
+  }
+  return `<button class="btn-ivory btn-wide" style="margin-bottom:14px" onclick="signInWithGoogle()">🔒 Mit Google anmelden für Cloud-Sync</button>`;
 }
 
 /* ---------- Bildschirm-Wachhalten (Wake Lock) ---------- */
@@ -483,6 +569,7 @@ function renderGamePicker(){
   app.innerHTML = `
     ${brandTitle('Dice-Games')}
     <div class="sub">Welches Spiel möchtet ihr spielen?</div>
+    ${cloudStatusHTML()}
     <div class="gamepick">
       <button class="pick-btn p30" onclick="chooseGame('30er')">
         <span class="icon">🎲</span>
@@ -499,6 +586,8 @@ function renderGamePicker(){
     </div>
     <div style="height:6px"></div>
     <button class="btn-ghost btn-wide" onclick="currentGame='__overview__';currentView='scores';render()">📊 Gesamtübersicht aller Spiele</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="currentGame='__daily__';render()">📅 Tagesübersicht (wer hat heute gewonnen?)</button>
   `;
 }
 function chooseGame(g){
@@ -520,6 +609,7 @@ function tabsHTML(){
 
 function render(){
   if(currentGame==='__overview__'){ renderOverallStats(); return; }
+  if(currentGame==='__daily__'){ renderDailyStats(); return; }
   if(!currentGame){ renderGamePicker(); return; }
   if(currentGame==='30er'){
     if(currentView==='scores') renderScores30(); else render30();
@@ -1001,13 +1091,13 @@ function submitAttack30(){
 function endTurn30(){
   if(game30.zeroRule && underZeroCount30()>=game30.zeroLimit){
     game30.phase='ranking';
-    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', top.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
     return;
   }
   if(!game30.zeroRule && livingCount30()<=1){
     game30.phase='winner';
-    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
+    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', w.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
     return;
   }
@@ -1114,7 +1204,7 @@ function render30(){
 function endZeroGame30(){
   showConfirm('Spiel beenden und Rangliste anzeigen?', ()=>{
     game30.phase='ranking';
-    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round');} game30.winnerRecorded=true; finishGame30Duration(); }
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', top.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); }
     render();
   });
 }
@@ -1565,6 +1655,7 @@ function checkWinTutto(announce){
     recordWinStreakTutto(gameTutto.players[bi], gameTutto.players);
     saveStatsTutto();
     saveTutto();
+    addGameLogEntry('tutto', gameTutto.players[bi], gameTutto.players.slice(), {score:best});
     renderWinnerTutto(gameTutto.players[bi], best);
   }
 }
@@ -2007,6 +2098,7 @@ function finishYatzy(){
     }
     gameYatzy.winnerRecorded = true;
     addLogYatzy(`🏆 <b>${esc(winnerName)}</b> gewinnt mit ${best} Punkten.`, 'round');
+    addGameLogEntry('yatzy', winnerName, gameYatzy.players.slice(), {score:best});
   }
   saveStatsYatzy();
 }
@@ -2205,6 +2297,9 @@ function renderOverallStats(){
   app.innerHTML = `
     ${brandTitle('Dice-Games')}
     <div class="sub">Gesamtübersicht über alle drei Spiele</div>
+    ${cloudStatusHTML()}
+
+    <button class="btn-ghost btn-wide" onclick="currentGame='__daily__';render()" style="margin-bottom:14px">📅 Tagesübersicht (wer hat heute gewonnen?)</button>
 
     <div class="overview-grid">
       <div class="cell"><b>${allNames.size}</b><small>Spieler</small></div>
@@ -2238,7 +2333,7 @@ function renderOverallStats(){
 
     <div class="panel">
       <h2>💾 Daten sichern</h2>
-      <div class="hint" style="margin:0 0 10px">Alle Statistiken und Vorlagen sind nur lokal auf diesem Gerät gespeichert. Exportiere sie als Datei, um sie zu sichern oder auf ein anderes Gerät zu übertragen.</div>
+      <div class="hint" style="margin:0 0 10px">${window.__fbReady ? 'Zusätzlich zum Cloud-Sync kannst du alle Statistiken und Vorlagen auch als Datei exportieren — praktisch als Backup oder zum manuellen Übertragen.' : 'Alle Statistiken und Vorlagen sind nur lokal auf diesem Gerät gespeichert. Exportiere sie als Datei, um sie zu sichern oder auf ein anderes Gerät zu übertragen.'}</div>
       <div class="row">
         <button class="btn-ivory" onclick="exportAllData()">⬇️ Exportieren</button>
         <button class="btn-ivory" onclick="$('#importFile').click()">⬆️ Importieren</button>
@@ -2250,11 +2345,52 @@ function renderOverallStats(){
   `;
 }
 
+/* ---------- Tagesübersicht: wer hat wann was gewonnen ---------- */
+let dailyStatsDate = null; // 'YYYY-MM-DD' | null (=heute)
+function renderDailyStats(){
+  const todayKey = dayKey(Date.now());
+  const selKey = dailyStatsDate || todayKey;
+  const entries = GAME_LOG.filter(e=>dayKey(e.ts)===selKey).sort((a,b)=>a.ts-b.ts);
+  const winCounts = {};
+  entries.forEach(e=>{ winCounts[e.winner] = (winCounts[e.winner]||0)+1; });
+  const winnersSorted = Object.entries(winCounts).sort((a,b)=>b[1]-a[1]);
+  const empty = t => `<div class="hint">${t}</div>`;
+
+  const rowsHTML = entries.map(e=>`
+    <div class="rank-item">
+      <span class="pos" style="width:56px;font-family:'Nunito',sans-serif;font-size:.78rem;font-weight:700;color:var(--ivory-dim)">${new Date(e.ts).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'})}</span>
+      <span class="n">${esc(GAME_LABELS[e.game]||e.game)}${e.score!==undefined?` · ${e.score} Pkt.`:''}<br><span style="font-size:.72rem;color:var(--ivory-dim);font-weight:600">${e.players.map(esc).join(', ')}</span></span>
+      <span class="l">🏆 ${esc(e.winner)}</span>
+    </div>`).join('');
+
+  app.innerHTML = `
+    ${brandTitle('Dice-Games')}
+    <div class="sub">Tagesübersicht</div>
+    ${cloudStatusHTML()}
+    <div class="panel">
+      <label for="dailyDate">Datum</label>
+      <input type="date" id="dailyDate" value="${selKey}" max="${todayKey}" onchange="dailyStatsDate=this.value;render()">
+    </div>
+    <div class="panel">
+      <h2>🏆 Sieger vom ${fmtDayLabel(selKey)}</h2>
+      ${winnersSorted.length ? `<ol class="score-list">${winnersSorted.map(([n,c])=>`<li><span class="val">${c}×</span><span class="who">${esc(n)}</span></li>`).join('')}</ol>` : empty('An diesem Tag wurde noch nichts gespielt.')}
+    </div>
+    <div class="panel">
+      <h2>🎲 Gespielte Partien</h2>
+      ${entries.length ? rowsHTML : empty('Keine Partien an diesem Tag.')}
+    </div>
+    <button class="btn-ghost btn-wide" onclick="currentGame='__overview__';render()">← Zur Gesamtübersicht</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+}
+
 /* ---------- Export / Import aller lokalen Daten ---------- */
 const ALL_DATA_KEYS = [
   STATS_KEY_30, PRESET_KEY_30,
   TUTTO_KEY, TUTTO_STATS_KEY, PRESET_KEY_TUTTO,
-  YATZY_KEY, YATZY_STATS_KEY, PRESET_KEY_YATZY
+  YATZY_KEY, YATZY_STATS_KEY, PRESET_KEY_YATZY,
+  GAMELOG_KEY
 ];
 function exportAllData(){
   const data = {app:'Dice-Games', exportedAt:new Date().toISOString(), values:{}};
@@ -2279,6 +2415,7 @@ function importAllData(file){
         STATS30 = loadStats30(); PRESETS30 = loadPresets30();
         STATS_TUTTO = loadStatsTutto(); PRESETS_TUTTO = loadPresetsTutto(); loadTutto();
         STATS_YATZY = loadStatsYatzy(); PRESETS_YATZY = loadPresetsYatzy(); loadYatzy();
+        GAME_LOG = loadGameLog();
         render();
         showAlert('Import abgeschlossen.');
       });
@@ -2293,6 +2430,85 @@ function importAllData(file){
    ============================================================ */
 render();
 if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }
+</script>
+
+<!-- ============================================================
+     CLOUD-SYNC (Firebase Auth + Firestore)
+     ============================================================
+     Trage unten deine eigene Firebase-Projekt-Konfiguration ein, um
+     Google-Login und geräteübergreifenden Cloud-Sync zu aktivieren.
+     Solange firebaseConfig.apiKey === 'DEIN_API_KEY' ist, bleibt die
+     App unverändert im reinen Lokal-Modus (kein Fehler, kein Login).
+
+     Einrichtung (einmalig, kostenlos):
+     1. https://console.firebase.google.com → Projekt erstellen
+     2. "Web-App hinzufügen" (</>) → Konfigurationsobjekt kopieren
+        und unten bei firebaseConfig einfügen
+     3. Build > Authentication > Sign-in method > Google aktivieren
+     4. Build > Firestore Database > Datenbank erstellen
+        (Produktionsmodus reicht, Regeln siehe unten anpassen)
+     5. Authentication > Settings > Authorized domains:
+        eigene Hosting-Domain eintragen (z. B. deinname.github.io)
+     6. In der Firestore-Konsole unter "Regeln" folgendes einfügen:
+
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /users/{userId} {
+              allow read, write: if request.auth != null && request.auth.uid == userId;
+            }
+          }
+        }
+
+     Damit kann jede angemeldete Person ausschliesslich ihr eigenes
+     Dokument lesen/schreiben — keine fremden Daten sind einsehbar.
+     ============================================================ -->
+<script type="module">
+  const firebaseConfig = {
+    apiKey: "DEIN_API_KEY",
+    authDomain: "DEIN_PROJEKT.firebaseapp.com",
+    projectId: "DEIN_PROJEKT",
+    storageBucket: "DEIN_PROJEKT.appspot.com",
+    messagingSenderId: "...",
+    appId: "..."
+  };
+
+  if(firebaseConfig.apiKey && firebaseConfig.apiKey !== 'DEIN_API_KEY'){
+    try{
+      const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
+      const { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } =
+        await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+      const { getFirestore, doc, getDoc, setDoc } =
+        await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js");
+
+      const fbApp = initializeApp(firebaseConfig);
+      const auth = getAuth(fbApp);
+      const db = getFirestore(fbApp);
+      const provider = new GoogleAuthProvider();
+
+      window.__fbSignIn = () => signInWithPopup(auth, provider);
+      window.__fbSignOut = () => signOut(auth);
+      window.__fbPullData = async () => {
+        if(!auth.currentUser) return null;
+        const snap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        return snap.exists() ? (snap.data().values || null) : null;
+      };
+      window.__fbPushData = async (values) => {
+        if(!auth.currentUser) return;
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {values, updatedAt:Date.now()}, {merge:true});
+      };
+      window.__fbReady = true;
+
+      onAuthStateChanged(auth, user => {
+        if(window.handleCloudAuthChange) window.handleCloudAuthChange(user);
+      });
+    }catch(e){
+      console.error('Firebase-Initialisierung fehlgeschlagen — App läuft im Lokal-Modus weiter.', e);
+      window.__fbReady = false;
+    }
+  } else {
+    window.__fbReady = false;
+  }
 </script>
 </body>
 </html>
