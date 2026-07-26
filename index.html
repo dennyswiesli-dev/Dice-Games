@@ -2429,7 +2429,32 @@ function importAllData(file){
    START
    ============================================================ */
 render();
-if ("serviceWorker" in navigator) { window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); }); }
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then(reg=>{
+      // Neue Version im Hintergrund gefunden → sofort aktivieren lassen (Service
+      // Worker ruft bereits skipWaiting()/clients.claim() auf).
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if(!nw) return;
+        nw.addEventListener('statechange', () => {
+          if(nw.state==='activated' && navigator.serviceWorker.controller) reg.update();
+        });
+      });
+      // Regelmässig auf neue Version prüfen, damit Updates nicht erst beim
+      // nächsten kompletten App-Neustart bemerkt werden.
+      setInterval(()=>reg.update().catch(()=>{}), 60*60*1000);
+    }).catch(()=>{});
+  });
+  // Sobald ein neuer Service Worker übernimmt, die Seite einmalig neu laden,
+  // damit Updates automatisch ankommen — kein manuelles Cache-Leeren mehr nötig.
+  let swRefreshed = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(swRefreshed) return;
+    swRefreshed = true;
+    window.location.reload();
+  });
+}
 </script>
 
 <!-- ============================================================
