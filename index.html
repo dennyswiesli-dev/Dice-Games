@@ -184,10 +184,10 @@ button:disabled{opacity:.4;cursor:not-allowed}
   transform:scale(1.02);
 }
 .player-card.current::before{
-  content:'AM ZUG';position:absolute;top:0;right:0;
+  content:'AM ZUG';position:absolute;top:0;left:50%;transform:translateX(-50%);
   background:var(--gold);color:var(--pip);
   font-size:.6rem;font-weight:800;letter-spacing:.08em;
-  padding:3px 8px;border-bottom-left-radius:8px;
+  padding:3px 10px;border-bottom-left-radius:8px;border-bottom-right-radius:8px;
 }
 .player-card.dead{opacity:.45;filter:grayscale(1)}
 .player-card.shield{background:var(--ivory-dim)}
@@ -1143,14 +1143,6 @@ function endTurn30(){
 }
 
 /* ---------- Render Spiel ---------- */
-function centeredIndices30(n, activeIdx){
-  // Ordnet die Spielerliste so an, dass die aktive Person in der Mitte der
-  // Anzeige steht, umgebende Sitznachbarn (in Zugreihenfolge) darüber/darunter.
-  const mid = Math.floor((n-1)/2);
-  const order = [];
-  for(let k=0;k<n;k++) order.push(((activeIdx - mid + k) % n + n) % n);
-  return order;
-}
 function sumGrid30(clickFn, highlight=true){
   const min = game30.dice, max = game30.dice*6, T = game30.target;
   // Untere Hälfte des möglichen Wertebereichs (deutliche Fehlwürfe, wo die
@@ -1185,8 +1177,7 @@ function render30(){
   const activeIdx = isInit ? game30.initIdx : game30.currentIdx;
   const cur = game30.players[activeIdx];
 
-  const cards = centeredIndices30(game30.players.length, activeIdx).map(i=>{
-    const p = game30.players[i];
+  const cards = game30.players.map((p,i)=>{
     const shielded = !isInit && game30.zeroRule && p.lives!==null && p.lives<0;
     const fx = game30.msg && game30.msg.hitIdx===i ? (game30.msg.fx||'') : '';
     const livesTxt = !p.alive ? '✕' : (p.lives===null ? '–' : p.lives);
@@ -1922,6 +1913,11 @@ function deletePresetYatzy(i){
 }
 
 /* ---------- Punkte-Helfer ---------- */
+const UPPER_CAT_MULTIPLIER = {ones:1, twos:2, threes:3, fours:4, fives:5, sixes:6};
+function upperIdealYatzy(catId){ return UPPER_CAT_MULTIPLIER[catId] * 3; } // 3 Treffer pro Zahl ergeben genau den Bonus
+function upperCatsOpenYatzy(scores){
+  return YATZY_CATS.filter(c=>c.section==='upper' && (scores[c.id]===null || scores[c.id]===undefined));
+}
 function upperSumYatzy(scores){
   return YATZY_CATS.filter(c=>c.section==='upper').reduce((sum,c)=>sum+(scores[c.id]||0),0);
 }
@@ -2073,7 +2069,14 @@ function renderGameYatzy(){
       const filled = val!==null && val!==undefined;
       const isActivePlayer = pi===gameYatzy.currentIdx && !gameYatzy.finished;
       if(filled){
-        return `<td class="ycell"><span class="fixed">${val}</span></td>`;
+        let diffTag = '';
+        if(c.section==='upper'){
+          const diff = val - upperIdealYatzy(c.id);
+          if(diff!==0){
+            diffTag = `<small style="display:block;font-size:.62rem;font-weight:800;color:${diff<0?'var(--red)':'var(--green)'}">${diff>0?'+':''}${diff}</small>`;
+          }
+        }
+        return `<td class="ycell"><span class="fixed">${val}</span>${diffTag}</td>`;
       }
       if(isActivePlayer){
         const opts = c.options().map(v=>`<option value="${v}">${v===0?'0 (gestrichen)':v}</option>`).join('');
@@ -2086,10 +2089,22 @@ function renderGameYatzy(){
 
   const upperSumCells = gameYatzy.players.map((p,pi)=>`<td>${upperSumYatzy(gameYatzy.scores[pi])}</td>`).join('');
   const bonusCells = gameYatzy.players.map((p,pi)=>{
-    const sum = upperSumYatzy(gameYatzy.scores[pi]);
-    const bonus = upperBonusYatzy(gameYatzy.scores[pi]);
+    const scores = gameYatzy.scores[pi];
+    const sum = upperSumYatzy(scores);
+    const bonus = upperBonusYatzy(scores);
     const remaining = Math.max(0, UPPER_BONUS_THRESHOLD - sum);
-    return `<td>${bonus>0?`+${bonus}`:(remaining>0?`<span style="color:var(--ivory-dim);font-weight:600;font-size:.68rem">noch ${remaining}</span>`:'0')}</td>`;
+    if(bonus>0) return `<td>+${bonus}</td>`;
+    if(remaining<=0) return `<td>0</td>`;
+    const openCats = upperCatsOpenYatzy(scores);
+    if(!openCats.length){
+      return `<td><span style="color:var(--red);font-weight:700;font-size:.68rem">verpasst</span></td>`;
+    }
+    const maxRemaining = openCats.reduce((s,c)=>s+UPPER_CAT_MULTIPLIER[c.id]*5, 0);
+    if(remaining > maxRemaining){
+      return `<td><span style="color:var(--red);font-weight:700;font-size:.68rem">nicht mehr erreichbar</span></td>`;
+    }
+    const avgNeeded = remaining/openCats.length;
+    return `<td><span style="color:var(--ivory-dim);font-weight:600;font-size:.68rem">noch ${remaining} · Ø ${avgNeeded%1===0?avgNeeded:avgNeeded.toFixed(1)}/Kat.</span></td>`;
   }).join('');
   const totalCells = gameYatzy.players.map((p,pi)=>`<td>${totalYatzy(gameYatzy.scores[pi])}</td>`).join('');
 
@@ -2112,7 +2127,7 @@ function renderGameYatzy(){
           <tr class="ytotal"><td>Total</td>${totalCells}</tr>
         </tbody>
       </table></div>
-      <div class="hint">Feld antippen und Punktzahl aus der Liste wählen. „0 (gestrichen)" wählen, wenn die Kategorie nicht erfüllt wurde. Es ist immer nur der aktuelle Spieler dran.</div>
+      <div class="hint">Feld antippen und Punktzahl aus der Liste wählen. „0 (gestrichen)" wählen, wenn die Kategorie nicht erfüllt wurde. Es ist immer nur der aktuelle Spieler dran.<br>Ideal für den Bonus sind 3 Treffer pro Zahl (z.&nbsp;B. 3× die 4 = 12). Bei weniger zeigt die kleine Zahl unter dem Eintrag die Abweichung (rot = Rückstand), die Bonus-Zeile rechnet, wie viel Schnitt in den restlichen Zahlen-Kategorien jetzt noch nötig ist.</div>
     </div>
 
     ${logHTMLYatzy()}
@@ -2232,10 +2247,34 @@ function renderWinnerScreenYatzy(){
       ${gameYatzy.durationSec ? `<div class="stat">⏱ Spieldauer: ${fmtDuration(gameYatzy.durationSec)}</div>` : ''}
       ${rows}
     </div>
+    ${reorderPickerHTMLYatzy()}
     <button class="btn-primary btn-wide" onclick="rematchYatzy()">Revanche (gleiche Runde)</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="fullResetYatzy()">Neues Spiel</button>
   `;
+}
+function reorderPickerHTMLYatzy(){
+  const list = gameYatzy.players.map((name,i)=>`
+    <div class="setup-item">
+      <span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span>
+      <span class="n">${esc(name)}</span>
+      <div class="reorder">
+        <button class="btn-ghost" style="padding:4px 8px" onclick="moveRematchPlayerYatzy(${i},-1)" ${i===0?'disabled':''} aria-label="${esc(name)} nach oben">▲</button>
+        <button class="btn-ghost" style="padding:4px 8px" onclick="moveRematchPlayerYatzy(${i},1)" ${i===gameYatzy.players.length-1?'disabled':''} aria-label="${esc(name)} nach unten">▼</button>
+      </div>
+    </div>`).join('');
+  return `
+    <div class="panel" style="text-align:left">
+      <h2>Reihenfolge für die nächste Runde</h2>
+      ${list}
+    </div>`;
+}
+function moveRematchPlayerYatzy(i, dir){
+  const j = i+dir;
+  if(j<0 || j>=gameYatzy.players.length) return;
+  [gameYatzy.players[i], gameYatzy.players[j]] = [gameYatzy.players[j], gameYatzy.players[i]];
+  [gameYatzy.scores[i], gameYatzy.scores[j]] = [gameYatzy.scores[j], gameYatzy.scores[i]];
+  render();
 }
 
 /* ---------- Scores ---------- */
