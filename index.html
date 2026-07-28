@@ -221,6 +221,13 @@ button:disabled{opacity:.4;cursor:not-allowed}
 }
 .sumgrid button.starget{background:var(--gold)}
 .sumgrid button.shigh{background:var(--green);color:#fff;box-shadow:inset 0 -2px 0 var(--green-dark)}
+.sumselect{
+  width:100%;margin-top:10px;padding:14px;border-radius:10px;border:none;
+  font-family:inherit;font-size:1.15rem;font-weight:800;
+  background:var(--ivory);color:var(--pip);
+  text-align:center;text-align-last:center;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,.15);
+}
 
 /* stepper */
 .stepper{display:flex;align-items:center;justify-content:center;gap:16px;margin:14px 0}
@@ -692,8 +699,16 @@ function loadStats30(){
 }
 function saveStats30(){ safeSetItem(STATS_KEY_30, JSON.stringify(STATS30)); }
 function statPlayer30(name){
-  if(!STATS30.players[name]) STATS30.players[name] = {wins:0, deaths:0, games:0};
-  return STATS30.players[name];
+  if(!STATS30.players[name]) STATS30.players[name] = {wins:0, deaths:0, games:0, attacksDealt:0, lowestRoll:null};
+  const p = STATS30.players[name];
+  if(p.attacksDealt===undefined) p.attacksDealt=0;
+  if(p.lowestRoll===undefined) p.lowestRoll=null;
+  return p;
+}
+function recordRollValue30(name, sum){
+  const p = statPlayer30(name);
+  if(p.lowestRoll===null || sum<p.lowestRoll) p.lowestRoll = sum;
+  saveStats30();
 }
 function recordGameStart30(){ if(!game30) return; game30.players.forEach(p=>statPlayer30(p.name).games++); saveStats30(); }
 function recordWin30(name){ statPlayer30(name).wins++; saveStats30(); }
@@ -740,6 +755,8 @@ function logHTML30(){
 function renderScores30(){
   const byWins = Object.entries(STATS30.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
   const byDeaths = Object.entries(STATS30.players).filter(([,v])=>v.deaths>0).sort((a,b)=>b[1].deaths-a[1].deaths).slice(0,10);
+  const byAttacks = Object.entries(STATS30.players).filter(([,v])=>v.attacksDealt>0).sort((a,b)=>b[1].attacksDealt-a[1].attacksDealt).slice(0,10);
+  const byLowest = Object.entries(STATS30.players).filter(([,v])=>v.lowestRoll!==null).sort((a,b)=>a[1].lowestRoll-b[1].lowestRoll).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
   const avgDur = avgDuration30();
   app.innerHTML = `
@@ -760,8 +777,16 @@ function renderScores30(){
     <div class="panel"><h2>💥 Höchste Abzüge</h2>
       ${STATS30.steals.length ? `<ol class="score-list">${STATS30.steals.map(e=>`<li><span class="val">−${e.a}</span><span class="who">${esc(e.s)} → ${esc(e.v)}</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Abzüge registriert.')}
     </div>
+    <div class="panel"><h2>⚔️ Meiste Abzüge ausgeteilt</h2>
+      <div class="hint" style="margin:-4px 0 8px">Wer am häufigsten erfolgreich angegriffen hat.</div>
+      ${byAttacks.length ? `<ol class="score-list">${byAttacks.map(([n,v])=>`<li><span class="val">${v.attacksDealt}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Angriffe registriert.')}
+    </div>
     <div class="panel"><h2>🎲 Schlechteste Würfe</h2>
       ${STATS30.rolls.length ? `<ol class="score-list shame">${STATS30.rolls.map(e=>`<li><span class="val">−${e.short}</span><span class="who">${esc(e.n)}: ${e.sum} gewürfelt (Ziel ${e.T})</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Würfe unter der Zielzahl gespeichert.')}
+    </div>
+    <div class="panel"><h2>🥶 Tiefster Wurf</h2>
+      <div class="hint" style="margin:-4px 0 8px">Persönlicher Tiefstwert pro Spieler:in, unabhängig vom Zielwert.</div>
+      ${byLowest.length ? `<ol class="score-list shame">${byLowest.map(([n,v])=>`<li><span class="val">${v.lowestRoll}</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Würfe registriert.')}
     </div>
     <button class="btn-ghost btn-wide" onclick="resetStats30()">Statistiken zurücksetzen</button>
     <div style="height:8px"></div>
@@ -777,12 +802,15 @@ function showH2H30(){
       aGames: STATS30.players[a] ? STATS30.players[a].games : 0,
       bGames: STATS30.players[b] ? STATS30.players[b].games : 0,
       aDeaths: STATS30.players[a] ? STATS30.players[a].deaths : 0,
-      bDeaths: STATS30.players[b] ? STATS30.players[b].deaths : 0
+      bDeaths: STATS30.players[b] ? STATS30.players[b].deaths : 0,
+      aAttacks: STATS30.players[a] ? STATS30.players[a].attacksDealt : 0,
+      bAttacks: STATS30.players[b] ? STATS30.players[b].attacksDealt : 0
     }),
     rows:(c)=>[
       {label:'Siege', a:c.aWins, b:c.bWins},
       {label:'Gespielte Spiele', a:c.aGames, b:c.bGames},
-      {label:'Ausscheiden / Minus', a:c.aDeaths, b:c.bDeaths}
+      {label:'Ausscheiden / Minus', a:c.aDeaths, b:c.bDeaths},
+      {label:'Abzüge ausgeteilt', a:c.aAttacks, b:c.bAttacks}
     ]
   });
 }
@@ -1015,6 +1043,7 @@ function submitSum30(sum){
   const cur = game30.players[game30.currentIdx];
   const T = game30.target;
   const wasUnderZero = game30.zeroRule && cur.lives < 0;
+  recordRollValue30(cur.name, sum);
   if(sum<T){
     const dmg = T-sum;
     cur.lives = cur.lives - dmg;
@@ -1052,7 +1081,10 @@ function submitSum30(sum){
 }
 
 function changeAttackCount30(d){
-  game30.attackCount = Math.max(0, Math.min(game30.dice, (game30.attackCount||0)+d));
+  // Bewusst kein Deckel auf game30.dice: durch Weiterwürfeln nur der Treffer
+  // (siehe Hinweis im Angriffs-Screen) kann die Trefferzahl die ursprüngliche
+  // Würfelanzahl übersteigen.
+  game30.attackCount = Math.max(0, (game30.attackCount||0)+d);
   $('#atkval').textContent = game30.attackCount;
   $('#atkdmg').textContent = game30.attackCount * game30.attackNum;
 }
@@ -1068,6 +1100,8 @@ function submitAttack30(){
     const target = game30.players[targetIdx];
     target.lives = target.lives - dmg;
     recordSteal30(cur.name, target.name, dmg);
+    statPlayer30(cur.name).attacksDealt++;
+    saveStats30();
     addLog30(`<b>${esc(cur.name)}</b> trifft <b>${esc(target.name)}</b>: ${game30.attackCount} × ${game30.attackNum} → <b>−${dmg}</b> → Stand <b>${target.lives}</b>.`);
     const face = Math.min(game30.attackNum, 6);
     const special = game30.attackNum > 6 ? ` (à ${game30.attackNum})` : '';
@@ -1109,9 +1143,26 @@ function endTurn30(){
 }
 
 /* ---------- Render Spiel ---------- */
+function centeredIndices30(n, activeIdx){
+  // Ordnet die Spielerliste so an, dass die aktive Person in der Mitte der
+  // Anzeige steht, umgebende Sitznachbarn (in Zugreihenfolge) darüber/darunter.
+  const mid = Math.floor((n-1)/2);
+  const order = [];
+  for(let k=0;k<n;k++) order.push(((activeIdx - mid + k) % n + n) % n);
+  return order;
+}
+const SUMGRID_SELECT_MAX_DICE = 3; // ab wie vielen Würfeln die Buttons statt eines Auswahlfelds erscheinen
 function sumGrid30(clickFn, highlight=true){
-  let grid='';
   const min = game30.dice, max = game30.dice*6, T = game30.target;
+  if(game30.dice <= SUMGRID_SELECT_MAX_DICE){
+    let opts = '<option value="" disabled selected>Summe wählen…</option>';
+    for(let s=min;s<=max;s++){
+      const tag = highlight ? (s===T?' — Ziel':(s>T?' — über Ziel':'')) : '';
+      opts += `<option value="${s}">${s}${tag}</option>`;
+    }
+    return `<select class="sumselect" onchange="if(this.value)${clickFn}(parseInt(this.value,10))">${opts}</select>`;
+  }
+  let grid='';
   for(let s=min;s<=max;s++){
     const cls = highlight ? (s===T?'starget':(s>T?'shigh':'')) : '';
     grid += `<button class="${cls}" onclick="${clickFn}(${s})">${s}</button>`;
@@ -1128,7 +1179,8 @@ function render30(){
   const activeIdx = isInit ? game30.initIdx : game30.currentIdx;
   const cur = game30.players[activeIdx];
 
-  const cards = game30.players.map((p,i)=>{
+  const cards = centeredIndices30(game30.players.length, activeIdx).map(i=>{
+    const p = game30.players[i];
     const shielded = !isInit && game30.zeroRule && p.lives!==null && p.lives<0;
     const fx = game30.msg && game30.msg.hitIdx===i ? (game30.msg.fx||'') : '';
     const livesTxt = !p.alive ? '✕' : (p.lives===null ? '–' : p.lives);
@@ -1231,6 +1283,29 @@ function directionPickerHTML30(){
 }
 function setDirRematch30(d){ game30.direction = d; render(); }
 
+function reorderPickerHTML30(){
+  const list = game30.players.map((p,i)=>`
+    <div class="setup-item">
+      <span class="pos" style="font-family:'Bungee',cursive;color:var(--gold);width:26px">${i+1}.</span>
+      <span class="n">${esc(p.name)}</span>
+      <div class="reorder">
+        <button class="btn-ghost" style="padding:4px 8px" onclick="moveRematchPlayer30(${i},-1)" ${i===0?'disabled':''} aria-label="${esc(p.name)} nach oben">▲</button>
+        <button class="btn-ghost" style="padding:4px 8px" onclick="moveRematchPlayer30(${i},1)" ${i===game30.players.length-1?'disabled':''} aria-label="${esc(p.name)} nach unten">▼</button>
+      </div>
+    </div>`).join('');
+  return `
+    <div class="panel" style="text-align:left">
+      <h2>Reihenfolge für die nächste Runde</h2>
+      ${list}
+    </div>`;
+}
+function moveRematchPlayer30(i, dir){
+  const j = i+dir;
+  if(j<0 || j>=game30.players.length) return;
+  [game30.players[i], game30.players[j]] = [game30.players[j], game30.players[i]];
+  render();
+}
+
 function renderRanking30(){
   const sorted = [...game30.players].sort((a,b)=>b.lives-a.lives);
   const rows = sorted.map((p,i)=>`
@@ -1249,6 +1324,7 @@ function renderRanking30(){
       ${durationLine30()}
       ${rows}
     </div>
+    ${reorderPickerHTML30()}
     ${directionPickerHTML30()}
     <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
     <div style="height:8px"></div>
@@ -1267,6 +1343,7 @@ function renderWinner30(){
       ${bigHitLine30()}
       ${durationLine30()}
     </div>
+    ${reorderPickerHTML30()}
     ${directionPickerHTML30()}
     <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
     <div style="height:8px"></div>
