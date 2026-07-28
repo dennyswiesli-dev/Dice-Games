@@ -350,6 +350,9 @@ tfoot td{border-top:2px solid rgba(248,244,230,.3);font-weight:800;color:var(--g
 .stat-tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
 .stat-tab{flex:1;min-width:90px;background:transparent;color:var(--ivory-dim);border:2px solid rgba(248,244,230,.2);font-size:.78rem;padding:9px 8px}
 .stat-tab.on{background:var(--gold);color:var(--pip);border-color:var(--gold)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.chip{font-size:.78rem;font-weight:700;padding:7px 14px;border-radius:999px;border:2px solid rgba(248,244,230,.2);background:transparent;color:var(--ivory-dim)}
+.chip.on{border-color:var(--gold);color:var(--gold)}
 .h2h-picker{display:flex;align-items:center;gap:10px;margin-bottom:14px}
 .h2h-picker select{width:100%;padding:12px;border-radius:10px;border:none;font-family:inherit;font-size:.95rem;font-weight:700;background:var(--ivory);color:var(--pip)}
 .h2h-vs{font-family:'Bungee',cursive;color:var(--gold);flex:none;font-size:.9rem}
@@ -396,6 +399,16 @@ let currentGame = null;   // null | '30er' | 'tutto' | 'yatzy'
 let currentView = 'play'; // play | scores (nur relevant, wenn ein Spiel aktiv ist)
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- Namensdopplungen auflösen (verhindert vermischte Statistiken) ---------- */
+function disambiguateNames(names){
+  const seen = {};
+  return names.map(n=>{
+    const key = n.trim().toLowerCase();
+    seen[key] = (seen[key]||0)+1;
+    return seen[key]>1 ? `${n} (${seen[key]})` : n;
+  });
+}
 function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="Logo">${txt}</h1>`; }
 
 /* ---------- Spiele-Log (spielübergreifend, für Tages-Leaderboards) ---------- */
@@ -437,7 +450,13 @@ function dieSVG(v, big=false, colorCls=''){
   return `<span class="die${big?' big':''}${colorCls?' '+colorCls:''}" data-v="${v}" role="img" aria-label="Würfel ${v}">${pips}</span>`;
 }
 
+/* ---------- Animationen an/aus (zusätzlich zu prefers-reduced-motion) ---------- */
+const ANIM_KEY = 'dice-games-anim-v1';
+function animEnabled(){ return localStorage.getItem(ANIM_KEY) !== 'off'; }
+function setAnimEnabled(on){ safeSetItem(ANIM_KEY, on ? 'on' : 'off'); }
+
 function playFX(kind, text){
+  if(!animEnabled()) return;
   if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   document.querySelectorAll('.fx-overlay').forEach(el=>el.remove());
   const ov=document.createElement('div'); ov.className='fx-overlay';
@@ -693,9 +712,9 @@ function deletePreset30(i){
 function loadStats30(){
   try{
     const s = JSON.parse(localStorage.getItem(STATS_KEY_30));
-    if(s && typeof s==='object') return {players:s.players||{}, steals:s.steals||[], rolls:s.rolls||[], durations:s.durations||[]};
+    if(s && typeof s==='object') return {players:s.players||{}, steals:s.steals||[], rolls:s.rolls||[], durations:s.durations||[], lowestScores:s.lowestScores||[]};
   }catch(e){}
-  return {players:{}, steals:[], rolls:[], durations:[]};
+  return {players:{}, steals:[], rolls:[], durations:[], lowestScores:[]};
 }
 function saveStats30(){ safeSetItem(STATS_KEY_30, JSON.stringify(STATS30)); }
 function statPlayer30(name){
@@ -721,9 +740,19 @@ function recordBadRoll30(name,sum){
   STATS30.rolls = STATS30.rolls.slice(0,10);
   saveStats30();
 }
+function recordLowestScore30(name, score){
+  if(score>=0) return;
+  STATS30.lowestScores.push({n:name, score, dice:game30.dice, target:game30.target, d:Date.now()});
+  STATS30.lowestScores.sort((a,b)=>a.score-b.score);
+  STATS30.lowestScores = STATS30.lowestScores.slice(0,10);
+  saveStats30();
+}
+function recordAllLowestScores30(){
+  game30.players.forEach(p=>{ if((p.minLives??0)<0) recordLowestScore30(p.name, p.minLives); });
+}
 function recordSteal30(attacker,victim,amount){
   if(amount<=0) return;
-  STATS30.steals.push({s:attacker, v:victim, a:amount, target:game30.target, d:Date.now()});
+  STATS30.steals.push({s:attacker, v:victim, a:amount, target:game30.target, dice:game30.dice, d:Date.now()});
   STATS30.steals.sort((a,b)=>b.a-a.a);
   STATS30.steals = STATS30.steals.slice(0,10);
   saveStats30();
@@ -759,6 +788,14 @@ function renderScores30(){
   const byLowest = Object.entries(STATS30.players).filter(([,v])=>v.lowestRoll!==null).sort((a,b)=>a[1].lowestRoll-b[1].lowestRoll).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
   const avgDur = avgDuration30();
+
+  // Nach Würfelanzahl filterbar, da z.B. ein -24-Fehlwurf bei 8 Würfeln etwas
+  // anderes bedeutet als bei 2 Würfeln (unterschiedliche Wertebereiche).
+  const scoreFilter = STATS30.scoreFilter || 0;
+  const diceSet = [...new Set([...STATS30.steals, ...STATS30.rolls, ...STATS30.lowestScores].map(e=>e.dice))].sort((a,b)=>a-b);
+  const flt = arr => (scoreFilter ? arr.filter(e=>e.dice===scoreFilter) : arr).slice(0,10);
+  const steals = flt(STATS30.steals), rolls = flt(STATS30.rolls), lowestScores = flt(STATS30.lowestScores);
+
   app.innerHTML = `
     ${brandTitle('30er&#8209;Spiel')}
     <div class="sub">Statistiken bleiben lokal auf diesem Gerät gespeichert</div>
@@ -774,24 +811,33 @@ function renderScores30(){
       <div class="hint" style="margin:-4px 0 8px">Wer am häufigsten auf 0/unter 0 gefallen ist.</div>
       ${byDeaths.length ? `<ol class="score-list shame">${byDeaths.map(([n,v])=>`<li><span class="val">${v.deaths}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Ausschiede oder Minus-Stürze registriert.')}
     </div>
-    <div class="panel"><h2>💥 Höchste Abzüge</h2>
-      ${STATS30.steals.length ? `<ol class="score-list">${STATS30.steals.map(e=>`<li><span class="val">−${e.a}</span><span class="who">${esc(e.s)} → ${esc(e.v)}</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Abzüge registriert.')}
-    </div>
     <div class="panel"><h2>⚔️ Meiste Abzüge ausgeteilt</h2>
       <div class="hint" style="margin:-4px 0 8px">Wer am häufigsten erfolgreich angegriffen hat.</div>
       ${byAttacks.length ? `<ol class="score-list">${byAttacks.map(([n,v])=>`<li><span class="val">${v.attacksDealt}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Angriffe registriert.')}
     </div>
+    ${diceSet.length>1 ? `<div class="chips" role="group" aria-label="Nach Würfelanzahl filtern">
+      <button class="chip ${scoreFilter===0?'on':''}" onclick="setScoreFilter30(0)">Alle</button>
+      ${diceSet.map(n=>`<button class="chip ${scoreFilter===n?'on':''}" onclick="setScoreFilter30(${n})">${n} 🎲</button>`).join('')}
+    </div>` : ''}
+    <div class="panel"><h2>💥 Höchste Abzüge</h2>
+      ${steals.length ? `<ol class="score-list">${steals.map(e=>`<li><span class="val">−${e.a}</span><span class="who">${esc(e.s)} → ${esc(e.v)}</span><span class="meta">${e.dice} 🎲 · ${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Abzüge registriert.')}
+    </div>
     <div class="panel"><h2>🎲 Schlechteste Würfe</h2>
-      ${STATS30.rolls.length ? `<ol class="score-list shame">${STATS30.rolls.map(e=>`<li><span class="val">−${e.short}</span><span class="who">${esc(e.n)}: ${e.sum} gewürfelt (Ziel ${e.T})</span><span class="meta">${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Würfe unter der Zielzahl gespeichert.')}
+      ${rolls.length ? `<ol class="score-list shame">${rolls.map(e=>`<li><span class="val">−${e.short}</span><span class="who">${esc(e.n)}: ${e.sum} gewürfelt (Ziel ${e.T})</span><span class="meta">${e.dice} 🎲 · ${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch keine Würfe unter der Zielzahl gespeichert.')}
     </div>
     <div class="panel"><h2>🥶 Tiefster Wurf</h2>
-      <div class="hint" style="margin:-4px 0 8px">Persönlicher Tiefstwert pro Spieler:in, unabhängig vom Zielwert.</div>
+      <div class="hint" style="margin:-4px 0 8px">Persönlicher Tiefstwert pro Spieler:in bei einem einzelnen Wurf, unabhängig vom Zielwert.</div>
       ${byLowest.length ? `<ol class="score-list shame">${byLowest.map(([n,v])=>`<li><span class="val">${v.lowestRoll}</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Würfe registriert.')}
+    </div>
+    <div class="panel"><h2>📉 Tiefster Punktestand</h2>
+      <div class="hint" style="margin:-4px 0 8px">Wie tief jemand in einem einzelnen Spiel ins Minus gefallen ist — auch bei Instant-Death zählt der Stand direkt vor dem Ausscheiden.</div>
+      ${lowestScores.length ? `<ol class="score-list shame">${lowestScores.map(e=>`<li><span class="val">${e.score}</span><span class="who">${esc(e.n)}</span><span class="meta">${e.dice} 🎲 · ${fmtDate(e.d)}</span></li>`).join('')}</ol>` : empty('Noch niemand ins Minus gefallen.')}
     </div>
     <button class="btn-ghost btn-wide" onclick="resetStats30()">Statistiken zurücksetzen</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>`;
 }
+function setScoreFilter30(n){ STATS30.scoreFilter = n; renderScores30(); }
 function showH2H30(){
   const names = Object.keys(STATS30.players).sort((a,b)=>a.localeCompare(b,'de'));
   renderH2HScreen({
@@ -814,12 +860,21 @@ function showH2H30(){
     ]
   });
 }
-function resetStats30(){ showConfirm('Wirklich alle Statistiken löschen?', ()=>{ STATS30={players:{},steals:[],rolls:[],durations:[]}; saveStats30(); render(); }); }
+function resetStats30(){ showConfirm('Wirklich alle Statistiken löschen?', ()=>{ STATS30={players:{},steals:[],rolls:[],durations:[],lowestScores:[]}; saveStats30(); render(); }); }
 
-function snapshot30(){ history30.push(JSON.stringify(game30)); if(history30.length>60) history30.shift(); }
+function snapshot30(){
+  // Statistiken (Siege, Abzüge, Würfe...) werden bei jedem Zug sofort
+  // persistiert. Damit "Rückgängig" diese Seiteneffekte korrekt mit
+  // zurückrollt, wird STATS30 im selben Snapshot mitgesichert.
+  history30.push(JSON.stringify({game:game30, stats:STATS30}));
+  if(history30.length>60) history30.shift();
+}
 function undo30(){
   if(!history30.length) return;
-  game30 = JSON.parse(history30.pop());
+  const snap = JSON.parse(history30.pop());
+  game30 = snap.game;
+  STATS30 = snap.stats;
+  saveStats30();
   render();
 }
 
@@ -978,7 +1033,8 @@ function movePlayer30(i, dir){
 }
 
 function startGame30(){
-  const players = setupPlayers30.map(p=>({name:p.name, lives:null, alive:true}));
+  const dedupedNames = disambiguateNames(setupPlayers30.map(p=>p.name));
+  const players = dedupedNames.map(name=>({name, lives:null, alive:true, minLives:null}));
   const zeroLimit = Math.max(1, Math.min(setupOpts30.zeroLimit, players.length-1));
   game30 = {
     players, currentIdx:0, initIdx:0, phase:'init',
@@ -999,14 +1055,22 @@ function startGame30(){
 
 function submitInit30(sum){
   snapshot30();
-  game30.players[game30.initIdx].lives = sum;
-  addLog30(`<b>${esc(game30.players[game30.initIdx].name)}</b> startet mit <b>${sum}</b> Leben.`);
+  const p = game30.players[game30.initIdx];
+  p.lives = sum;
+  p.minLives = sum;
+  addLog30(`<b>${esc(p.name)}</b> startet mit <b>${sum}</b> Leben.`);
   game30.initIdx++;
   if(game30.initIdx >= game30.players.length){
-    game30.phase='roll';
-    game30.currentIdx=0;
-    game30.msg = {text:`Alle Startleben erwürfelt — ${esc(game30.players[0].name)} beginnt!`, type:'good', hitIdx:-1};
+    game30.phase='starter';
+    game30.starterIdx = 0;
   }
+  render();
+}
+function setStarter30(i){ game30.starterIdx = i; render(); }
+function confirmStarter30(){
+  game30.phase='roll';
+  game30.currentIdx = game30.starterIdx || 0;
+  game30.msg = {text:`Alle Startleben erwürfelt — ${esc(game30.players[game30.currentIdx].name)} beginnt!`, type:'good', hitIdx:-1};
   render();
 }
 
@@ -1047,6 +1111,7 @@ function submitSum30(sum){
   if(sum<T){
     const dmg = T-sum;
     cur.lives = cur.lives - dmg;
+    cur.minLives = Math.min(cur.minLives ?? cur.lives, cur.lives);
     recordBadRoll30(cur.name, sum);
     addLog30(`<b>${esc(cur.name)}</b> würfelt ${sum} → <b>−${dmg}</b> → Stand <b>${cur.lives}</b>.`);
     let m = `${esc(cur.name)}: ${sum} gewürfelt → −${dmg} Leben`;
@@ -1054,6 +1119,9 @@ function submitSum30(sum){
     if(!game30.zeroRule){
       cur.lives = Math.max(0, cur.lives);
       if(cur.lives===0){ cur.alive=false; recordDeath30(cur.name); addLog30(`💀 <b>${esc(cur.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
+    } else if(cur.lives<0 && !wasUnderZero){
+      recordDeath30(cur.name);
+      addLog30(`🩸 <b>${esc(cur.name)}</b> fällt unter 0 – kämpft aber weiter (0er-Regel).`);
     }
     game30.msg = {text:m, type:'bad', hitIdx:game30.currentIdx, fx:'hit', quip:q};
     endTurn30();
@@ -1071,6 +1139,22 @@ function submitSum30(sum){
       endTurn30();
       return;
     }
+    const targetIdx = attackTargetIdx30(game30.currentIdx);
+    if(targetIdx<0){
+      game30.msg = {text:`${esc(cur.name)}: ${sum} → +${diff} Leben gutgeschrieben. Kein gültiger Nachbar zum Abziehen — alle anderen sind geschützt.`, type:'good', hitIdx:game30.currentIdx, fx:'heal'};
+      addLog30(`Kein gültiger Nachbar – Abzug entfällt.`);
+      endTurn30();
+      return;
+    }
+    if(diff > 6){
+      // Differenz über 6 (nur bei 7-8 Würfeln möglich): Abzugsart wählen —
+      // entweder feste Zielzahl 1-6 oder auf die 6 würfeln (zählt als volle Differenz).
+      game30.phase = 'choice';
+      game30.pendingDiff = diff;
+      game30.msg = {text:`+${diff} Leben gutgeschrieben für ${esc(cur.name)}! Differenz über 6 – Abzugsart wählen.`, type:'good', hitIdx:game30.currentIdx, fx:'heal'};
+      render();
+      return;
+    }
     game30.attackNum = diff;
     game30.attackCount = 0;
     game30.phase = 'attack';
@@ -1078,6 +1162,21 @@ function submitSum30(sum){
     game30.msg = {text:`+${diff} Leben gutgeschrieben für ${esc(cur.name)}!`, type:'good', hitIdx:game30.currentIdx, fx:'heal', quip:q};
     render();
   }
+}
+function chooseZiel30(n){
+  game30.attackNum = n;
+  game30.attackCount = 0;
+  game30.phase = 'attack';
+  addLog30(`<b>${esc(game30.players[game30.currentIdx].name)}</b> wählt Zielzahl <b>${n}</b> (−${n} pro Treffer).`);
+  render();
+}
+function chooseSix30(){
+  const d = game30.pendingDiff;
+  game30.attackNum = d;
+  game30.attackCount = 0;
+  game30.phase = 'attack';
+  addLog30(`<b>${esc(game30.players[game30.currentIdx].name)}</b> wählt: <b>6 zählt als ${d}</b> (−${d} pro Treffer).`);
+  render();
 }
 
 function changeAttackCount30(d){
@@ -1099,6 +1198,7 @@ function submitAttack30(){
   } else if(dmg>0){
     const target = game30.players[targetIdx];
     target.lives = target.lives - dmg;
+    target.minLives = Math.min(target.minLives ?? target.lives, target.lives);
     recordSteal30(cur.name, target.name, dmg);
     statPlayer30(cur.name).attacksDealt++;
     saveStats30();
@@ -1113,6 +1213,12 @@ function submitAttack30(){
     if(!game30.zeroRule){
       target.lives = Math.max(0, target.lives);
       if(target.lives===0){ target.alive=false; recordDeath30(target.name); addLog30(`💀 <b>${esc(target.name)}</b> ist ausgeschieden.`); m += ' — ausgeschieden! 💀'; q = quip('elimination'); }
+    } else if(target.lives<0){
+      // Angriffsziele sind bei der 0er-Regel nie bereits im Minus (siehe
+      // attackTargetIdx30), jeder Sturz unter 0 durch einen Angriff ist also
+      // immer ein Erst-Sturz und zählt in der Statistik.
+      recordDeath30(target.name);
+      addLog30(`🩸 <b>${esc(target.name)}</b> fällt unter 0 – kämpft aber weiter (0er-Regel).`);
     }
     game30.msg = {text:m, type:'bad', hitIdx:targetIdx, fx:'hit', quip:q};
   } else {
@@ -1126,13 +1232,13 @@ function submitAttack30(){
 function endTurn30(){
   if(game30.zeroRule && underZeroCount30()>=game30.zeroLimit){
     game30.phase='ranking';
-    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', top.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); }
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', top.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); recordAllLowestScores30(); }
     render();
     return;
   }
   if(!game30.zeroRule && livingCount30()<=1){
     game30.phase='winner';
-    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', w.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); }
+    if(!game30.winnerRecorded){ const w=game30.players.find(p=>p.alive); if(w){recordWin30(w.name); addLog30(`🏆 <b>${esc(w.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', w.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); recordAllLowestScores30(); }
     render();
     return;
   }
@@ -1165,13 +1271,29 @@ function sumGrid30(clickFn, highlight=true){
     grid += `<button class="${cls}" onclick="${clickFn}(${s})">${s}</button>`;
   }
   html += `<div class="sumgrid">${grid}</div>`;
+  html += `
+    <details style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:.8rem;font-weight:700;color:var(--ivory-dim)">Zahl lieber eintippen?</summary>
+      <div class="row" style="margin-top:8px">
+        <input type="number" id="manualSumInput" inputmode="numeric" min="${min}" max="${max}" placeholder="${min}–${max}">
+        <button class="btn-ivory" style="flex:none" onclick="submitManualSum30('${clickFn}')">Eintragen</button>
+      </div>
+    </details>`;
   return html;
+}
+function submitManualSum30(clickFn){
+  const inp = $('#manualSumInput');
+  const v = parseInt(inp.value,10);
+  const min = game30.dice, max = game30.dice*6;
+  if(!Number.isInteger(v) || v<min || v>max){ inp.focus(); return; }
+  window[clickFn](v);
 }
 
 function render30(){
   if(!game30){ renderSetup30(); return; }
   if(game30.phase==='winner'){ renderWinner30(); return; }
   if(game30.phase==='ranking'){ renderRanking30(); return; }
+  if(game30.phase==='starter'){ renderStarterPick30(); return; }
 
   const isInit = game30.phase==='init';
   const activeIdx = isInit ? game30.initIdx : game30.currentIdx;
@@ -1203,6 +1325,17 @@ function render30(){
         <div class="hint" style="margin:0 0 4px">Endsumme aller ${game30.dice} Würfel antippen:</div>
         ${sumGrid30('submitSum30')}
         <div class="hint">Über ${game30.target}: Differenz wird gutgeschrieben, danach greifst du an.</div>
+      </div>`;
+  } else if(game30.phase==='choice'){
+    const d = game30.pendingDiff;
+    action = `
+      <div class="panel">
+        <h2>Differenz ${d} – Abzugsart wählen</h2>
+        <div class="hint" style="margin:0 0 8px">Eine Würfelzahl ${d} gibt es nicht. ${esc(cur.name)} entscheidet:</div>
+        <div class="hint" style="margin:0 0 4px"><b>Möglichkeit 1:</b> Zielzahl 1–6 wählen (Abzug pro Treffer = gewählte Zahl)</div>
+        <div class="sumgrid">${range(1,6).map(n=>`<button onclick="chooseZiel30(${n})">${n}</button>`).join('')}</div>
+        <div class="hint" style="margin:10px 0 4px"><b>Möglichkeit 2:</b> Auf die 6 würfeln – jede 6 zählt als ${d}</div>
+        <button class="btn-primary btn-wide" onclick="chooseSix30()">6 = ${d} (−${d} pro Treffer)</button>
       </div>`;
   } else if(game30.phase==='attack'){
     const targetIdx = attackTargetIdx30(game30.currentIdx);
@@ -1251,10 +1384,29 @@ function render30(){
   `;
 }
 
+function renderStarterPick30(){
+  const rows = game30.players.map((p,i)=>`
+    <label class="opt ${game30.starterIdx===i?'on':''}" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px">
+      <input type="radio" name="starter30" ${game30.starterIdx===i?'checked':''} onchange="setStarter30(${i})" style="width:20px;height:20px;accent-color:var(--gold)">
+      <span style="flex:1;font-weight:800">${esc(p.name)}</span>
+      <span style="font-family:'Bungee',cursive;color:var(--gold)">${p.lives}</span>
+    </label>`).join('');
+  app.innerHTML = `
+    ${brandTitle(`${game30.target}er&#8209;Spiel`)}
+    <div class="sub">Alle Startleben erwürfelt</div>
+    <div class="panel">
+      <h2>Wer beginnt?</h2>
+      <div class="hint" style="margin:0 0 10px">Unabhängig von der Sitzreihenfolge – wählt, wer den ersten Zug macht.</div>
+      ${rows}
+    </div>
+    <button class="btn-primary btn-wide" onclick="confirmStarter30()">Los geht's 🎲</button>
+  `;
+}
+
 function endZeroGame30(){
   showConfirm('Spiel beenden und Rangliste anzeigen?', ()=>{
     game30.phase='ranking';
-    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', top.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); }
+    if(!game30.winnerRecorded){ const top=[...game30.players].sort((a,b)=>b.lives-a.lives)[0]; if(top){recordWin30(top.name); addLog30(`🏆 <b>${esc(top.name)}</b> gewinnt.`, 'round'); addGameLogEntry('30er', top.name, game30.players.map(p=>p.name));} game30.winnerRecorded=true; finishGame30Duration(); recordAllLowestScores30(); }
     render();
   });
 }
@@ -1596,7 +1748,7 @@ function moveTuttoField(i, dir){
 }
 
 function startTutto(){
-  const names = setupPlayersTutto.map(n=>n.trim()).filter(Boolean);
+  const names = disambiguateNames(setupPlayersTutto.map(n=>n.trim()).filter(Boolean));
   if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   let target = window._tuttoTarget || parseInt((($('#tuttoTarget')||{}).value), 10);
   if(!target || target<500) target = 6000;
@@ -2032,7 +2184,7 @@ function moveYatzyField(i, dir){
 }
 
 function startYatzy(){
-  const names = setupPlayersYatzy.map(n=>n.trim()).filter(Boolean);
+  const names = disambiguateNames(setupPlayersYatzy.map(n=>n.trim()).filter(Boolean));
   if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   const scores = names.map(()=>{
     const s = {}; YATZY_CATS.forEach(c=>s[c.id]=null); return s;
@@ -2453,6 +2605,16 @@ function renderOverallStats(){
           </div>
         </div>`).join('')}
     </div>` : ''}
+
+    <div class="panel">
+      <h2>✨ Animationen</h2>
+      <div class="opt">
+        <input type="checkbox" id="animToggle" ${animEnabled()?'checked':''} onchange="setAnimEnabled(this.checked)">
+        <div class="txt">Freche Einblendungen bei Treffern & Fehlwürfen
+          <small>Betrifft alle drei Spiele. Wird zusätzlich automatisch deaktiviert, wenn das Betriebssystem "Bewegung reduzieren" eingestellt hat.</small>
+        </div>
+      </div>
+    </div>
 
     <div class="panel">
       <h2>💾 Daten sichern</h2>
