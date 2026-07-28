@@ -677,7 +677,7 @@ function loadPreset30(i){
   if(!v) return;
   setupPlayers30 = v.players.map(n=>({name:n}));
   setupOpts30 = {...v.opts};
-  setupStep30 = 3;
+  setupStep30 = 1; // Schritt 1, damit die Reihenfolge per ▲▼ direkt anpassbar ist
   renderSetup30();
 }
 function deletePreset30(i){
@@ -1151,23 +1151,29 @@ function centeredIndices30(n, activeIdx){
   for(let k=0;k<n;k++) order.push(((activeIdx - mid + k) % n + n) % n);
   return order;
 }
-const SUMGRID_SELECT_MAX_DICE = 3; // ab wie vielen Würfeln die Buttons statt eines Auswahlfelds erscheinen
 function sumGrid30(clickFn, highlight=true){
   const min = game30.dice, max = game30.dice*6, T = game30.target;
-  if(game30.dice <= SUMGRID_SELECT_MAX_DICE){
+  // Untere Hälfte des möglichen Wertebereichs (deutliche Fehlwürfe, wo die
+  // genaue Zahl selten wichtig ist) kommt in ein Auswahlfeld, um Platz zu
+  // sparen. Die obere Hälfte (nahe am/über dem Ziel, wo Genauigkeit zählt)
+  // bleibt als antippbare Matrix.
+  const buttonMin = Math.max(min, Math.round(max/2));
+  let html = '';
+  if(buttonMin > min){
     let opts = '<option value="" disabled selected>Summe wählen…</option>';
-    for(let s=min;s<=max;s++){
+    for(let s=min;s<buttonMin;s++){
       const tag = highlight ? (s===T?' — Ziel':(s>T?' — über Ziel':'')) : '';
       opts += `<option value="${s}">${s}${tag}</option>`;
     }
-    return `<select class="sumselect" onchange="if(this.value)${clickFn}(parseInt(this.value,10))">${opts}</select>`;
+    html += `<select class="sumselect" onchange="if(this.value)${clickFn}(parseInt(this.value,10))">${opts}</select>`;
   }
   let grid='';
-  for(let s=min;s<=max;s++){
+  for(let s=buttonMin;s<=max;s++){
     const cls = highlight ? (s===T?'starget':(s>T?'shigh':'')) : '';
     grid += `<button class="${cls}" onclick="${clickFn}(${s})">${s}</button>`;
   }
-  return `<div class="sumgrid">${grid}</div>`;
+  html += `<div class="sumgrid">${grid}</div>`;
+  return html;
 }
 
 function render30(){
@@ -1484,7 +1490,7 @@ function loadPresetTutto(i){
   setupPlayersTutto = v.players.slice();
   while(setupPlayersTutto.length<2) setupPlayersTutto.push('');
   window._tuttoTarget = v.target;
-  setupStepTutto = 2;
+  setupStepTutto = 1; // Schritt 1, damit die Reihenfolge per ▲▼ direkt anpassbar ist
   renderSetupTutto();
 }
 function deletePresetTutto(i){
@@ -1903,7 +1909,7 @@ function loadPresetYatzy(i){
   if(!v) return;
   setupPlayersYatzy = v.players.slice();
   while(setupPlayersYatzy.length<2) setupPlayersYatzy.push('');
-  setupStepYatzy = 2;
+  setupStepYatzy = 1; // Schritt 1, damit die Reihenfolge per ▲▼ direkt anpassbar ist
   renderSetupYatzy();
 }
 function deletePresetYatzy(i){
