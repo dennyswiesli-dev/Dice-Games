@@ -1557,14 +1557,23 @@ function fullReset30(){ setupPlayers30=[]; setupStep30=1; game30=null; history30
 const TUTTO_KEY = 'tutto-tracker-v2';
 const TUTTO_STATS_KEY = 'tutto-stats-v1';
 let gameTutto = null; // {players:[], target:6000, rounds:[[..]], finished:false}
-let lastFocusedTutto = null;
 
 function loadTutto(){
   try{
     const raw = localStorage.getItem(TUTTO_KEY);
     if(!raw) return;
     const s = JSON.parse(raw);
-    if(s && s.players && s.players.length) gameTutto = s;
+    if(s && s.players && s.players.length){
+      gameTutto = s;
+      // Rückwärtskompatibel: ältere gespeicherte Partien kannten den
+      // Zug-für-Zug-Ablauf noch nicht.
+      const n = gameTutto.players.length;
+      if(!Array.isArray(gameTutto.roundInProgress) || gameTutto.roundInProgress.length!==n) gameTutto.roundInProgress = gameTutto.players.map(()=>0);
+      if(!Array.isArray(gameTutto.turnTaken) || gameTutto.turnTaken.length!==n) gameTutto.turnTaken = gameTutto.players.map(()=>false);
+      if(typeof gameTutto.currentIdx!=='number') gameTutto.currentIdx = 0;
+      if(typeof gameTutto.pendingInput!=='number') gameTutto.pendingInput = 0;
+      if(!Array.isArray(gameTutto.log)) gameTutto.log = [];
+    }
   }catch(e){}
 }
 function saveTutto(){ safeSetItem(TUTTO_KEY, JSON.stringify(gameTutto)); }
@@ -1795,17 +1804,29 @@ function startTutto(){
   if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
   let target = window._tuttoTarget || parseInt((($('#tuttoTarget')||{}).value), 10);
   if(!target || target<500) target = 6000;
-  gameTutto = {players:names, target, rounds:[], finished:false};
+  gameTutto = {players:names, target, rounds:[], finished:false, currentIdx:0, roundInProgress:names.map(()=>0), turnTaken:names.map(()=>false), pendingInput:0, log:[]};
   names.forEach(n=>statPlayerTutto(n).games++);
   saveStatsTutto();
   saveTutto();
   render();
 }
 
-/* ---------- Spielansicht ---------- */
-function renderGameTutto(){
+/* ---------- Protokoll ---------- */
+function addLogTutto(html, cls){ if(gameTutto){ gameTutto.log = gameTutto.log || []; gameTutto.log.unshift({html, cls:cls||''}); if(gameTutto.log.length>80) gameTutto.log.pop(); } }
+function logHTMLTutto(){
+  if(!gameTutto || !gameTutto.log || !gameTutto.log.length) return '';
+  return `<details class="panel gamelog" open><summary>Protokoll</summary><ul class="log-list">${gameTutto.log.map(l=>`<li class="${l.cls}">${l.html}</li>`).join('')}</ul></details>`;
+}
+function liveTotalsTutto(){
   const t = totalsTutto();
-  const order = gameTutto.players.map((p,i)=>({name:p, pts:t[i], idx:i})).sort((a,b)=>b.pts-a.pts);
+  return t.map((v,i)=>v + (gameTutto.roundInProgress[i]||0));
+}
+
+/* ---------- Spielansicht (Zug für Zug, wie Yatzy) ---------- */
+function renderGameTutto(){
+  const finalTotals = totalsTutto();
+  const liveTotals = liveTotalsTutto();
+  const order = gameTutto.players.map((p,i)=>({name:p, pts:liveTotals[i], idx:i})).sort((a,b)=>b.pts-a.pts);
   const max = Math.max(gameTutto.target, order[0]?order[0].pts:0);
   const standings = order.map((o,rank)=>{
     const pct = Math.max(0, Math.min(100, (o.pts/max)*100));
@@ -1813,7 +1834,7 @@ function renderGameTutto(){
     <div class="standing ${rank===0 && o.pts>0 ? 'leader':''}">
       <div class="pos">${rank+1}</div>
       <div style="flex:1;min-width:0">
-        <div class="name">${esc(o.name)}</div>
+        <div class="name">${esc(o.name)}${gameTutto.turnTaken[o.idx]?' <small style="color:var(--ivory-dim);font-weight:600">✓ dran gewesen</small>':''}</div>
         <div class="bar"><i style="width:${pct}%"></i></div>
       </div>
       <div class="pts">${fmtNum(o.pts)}</div>
@@ -1821,14 +1842,14 @@ function renderGameTutto(){
   }).join('');
 
   const rn = gameTutto.rounds.length+1;
-  const entries = gameTutto.players.map((p,i)=>`
-    <div class="tutto-entry">
-      <div class="who">${esc(p)}</div>
-      <input type="number" step="50" inputmode="numeric" placeholder="0" data-tidx="${i}" id="tent${i}">
-    </div>`).join('');
+  const curIdx = gameTutto.currentIdx;
+  const curName = gameTutto.players[curIdx];
 
-  const quickVals = [-1000,300,500,1000,2000];
-  const quick = quickVals.map(v=>`<button type="button" onclick="quickAddTutto(${v})">${v>0?'+':''}${fmtNum(v)}</button>`).join('');
+  const quickVals = [-1000,50,150,300,500,1000,2000];
+  const quick = quickVals.map(v=>{
+    if(v===-1000) return `<button type="button" onclick="quickStealTutto()">−1000<small style="display:block;font-size:.6rem;font-weight:700;opacity:.8">vom Ersten</small></button>`;
+    return `<button type="button" onclick="quickAddTutto(${v})">${v>0?'+':''}${fmtNum(v)}</button>`;
+  }).join('');
 
   let histRows = '';
   gameTutto.rounds.forEach((r,ri)=>{
@@ -1836,7 +1857,7 @@ function renderGameTutto(){
     r.forEach(v=>{ const cls = v<0?' class="neg"':(v===0?' class="zero"':''); histRows += `<td${cls}>${fmtNum(v)}</td>`; });
     histRows += `</tr>`;
   });
-  const totalsRow = `<tr><td>Total</td>${gameTutto.players.map((p,i)=>`<td>${fmtNum(t[i])}</td>`).join('')}</tr>`;
+  const totalsRow = `<tr><td>Total</td>${gameTutto.players.map((p,i)=>`<td>${fmtNum(finalTotals[i])}</td>`).join('')}</tr>`;
   const headRow = `<th>Runde</th>${gameTutto.players.map(p=>`<th>${esc(p)}</th>`).join('')}`;
 
   app.innerHTML = `
@@ -1846,12 +1867,14 @@ function renderGameTutto(){
     <div class="panel"><h2>Rangliste</h2>${standings}</div>
 
     <div class="panel">
-      <h2>${dieSVG(Math.min(((rn-1)%6)+1,6),false,'gold')} Runde ${rn}</h2>
+      <h2>${dieSVG(Math.min(((rn-1)%6)+1,6),false,'gold')} Runde ${rn} · ${esc(curName)} ist dran</h2>
       <div class="quick">${quick}</div>
-      ${entries}
-      <button class="btn-primary btn-wide" onclick="commitRoundTutto()">Runde abschliessen</button>
-      <div class="hint">Minuspunkte (z.&nbsp;B. Strasse verpasst: −1000) einfach mit Minus eintragen. Leere Felder zählen als 0.</div>
+      <input type="number" step="50" inputmode="numeric" placeholder="0" id="tuttoEntryInput" value="${gameTutto.pendingInput||''}">
+      <button class="btn-primary btn-wide" style="margin-top:10px" onclick="confirmTuttoTurn()">Bestätigen ✓</button>
+      <div class="hint">Punkte von Hand eintragen oder über die Buttons zusammenklicken. Minuspunkte (z.&nbsp;B. Strasse verpasst) einfach mit Minus eintragen. −1000 schreibt dir automatisch 1000 gut und zieht sie beim aktuellen Spitzenreiter ab. Leeres Feld zählt als 0.</div>
     </div>
+
+    ${logHTMLTutto()}
 
     <div class="panel">
       <h2>Verlauf</h2>
@@ -1866,31 +1889,57 @@ function renderGameTutto(){
       </div>
     </div>
   `;
-  app.querySelectorAll('[data-tidx]').forEach(inp=>{
-    inp.addEventListener('focus', ()=>{ lastFocusedTutto = inp; });
-  });
+  const entryInp = $('#tuttoEntryInput');
+  if(entryInp){
+    entryInp.addEventListener('input', ()=>{ gameTutto.pendingInput = parseInt(entryInp.value,10)||0; });
+  }
   checkWinTutto(false);
 }
 
 function quickAddTutto(v){
-  if(lastFocusedTutto){
-    const cur = parseInt(lastFocusedTutto.value,10)||0;
-    lastFocusedTutto.value = cur+v;
-    lastFocusedTutto.focus();
-  }
+  gameTutto.pendingInput = (gameTutto.pendingInput||0) + v;
+  render();
 }
 
-function commitRoundTutto(){
-  const inputs = document.querySelectorAll('[data-tidx]');
-  const round = []; let any=false;
-  inputs.forEach(inp=>{
-    let v = parseInt(inp.value,10);
-    if(isNaN(v)) v=0; else any=true;
-    round.push(v);
-  });
-  if(!any){ showAlert('Keine Punkte eingetragen.'); return; }
-  gameTutto.rounds.push(round);
-  recordRoundTutto(round, gameTutto.players);
+function quickStealTutto(){
+  const liveTotals = liveTotalsTutto();
+  let bestIdx = 0;
+  liveTotals.forEach((t,i)=>{ if(t>liveTotals[bestIdx]) bestIdx=i; });
+  const curIdx = gameTutto.currentIdx;
+  const curName = gameTutto.players[curIdx];
+  if(bestIdx!==curIdx){
+    gameTutto.roundInProgress[bestIdx] -= 1000;
+    addLogTutto(`<b>${esc(curName)}</b> klaut <b>1000</b> Punkte vom Spitzenreiter <b>${esc(gameTutto.players[bestIdx])}</b>.`);
+  } else {
+    addLogTutto(`<b>${esc(curName)}</b> ist bereits Spitzenreiter — der Punkteklau geht ins Leere.`);
+  }
+  gameTutto.pendingInput = (gameTutto.pendingInput||0) + 1000;
+  saveTutto();
+  render();
+}
+
+function confirmTuttoTurn(){
+  const idx = gameTutto.currentIdx;
+  const v = gameTutto.pendingInput||0;
+  const name = gameTutto.players[idx];
+  gameTutto.roundInProgress[idx] += v;
+  gameTutto.turnTaken[idx] = true;
+  addLogTutto(`<b>${esc(name)}</b> trägt <b>${v>=0?'+':''}${fmtNum(v)}</b> ein → Rundenstand <b>${fmtNum(gameTutto.roundInProgress[idx])}</b>.`);
+  gameTutto.pendingInput = 0;
+  const n = gameTutto.players.length;
+  if(gameTutto.turnTaken.every(Boolean)){
+    const round = gameTutto.roundInProgress.slice();
+    gameTutto.rounds.push(round);
+    recordRoundTutto(round, gameTutto.players);
+    addLogTutto(`Runde ${gameTutto.rounds.length} abgeschlossen.`, 'round');
+    gameTutto.roundInProgress = gameTutto.players.map(()=>0);
+    gameTutto.turnTaken = gameTutto.players.map(()=>false);
+    gameTutto.currentIdx = 0;
+  } else {
+    let next = (idx+1) % n;
+    while(gameTutto.turnTaken[next]) next = (next+1) % n;
+    gameTutto.currentIdx = next;
+  }
   saveTutto();
   render();
   checkWinTutto(true);
@@ -1899,6 +1948,10 @@ function undoRoundTutto(){
   if(!gameTutto.rounds.length) return;
   gameTutto.rounds.pop();
   gameTutto.finished = false;
+  gameTutto.roundInProgress = gameTutto.players.map(()=>0);
+  gameTutto.turnTaken = gameTutto.players.map(()=>false);
+  gameTutto.currentIdx = 0;
+  gameTutto.pendingInput = 0;
   saveTutto();
   render();
 }
