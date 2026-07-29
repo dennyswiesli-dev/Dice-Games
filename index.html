@@ -313,6 +313,16 @@ details.gamelog summary{cursor:pointer;font-weight:800;text-transform:uppercase;
 .standing .bar{height:6px;border-radius:3px;background:rgba(0,0,0,.1);margin-top:4px;overflow:hidden}
 .standing .bar i{display:block;height:100%;background:var(--green);border-radius:3px;transition:width .4s ease}
 .standing.leader .bar i{background:var(--gold)}
+.standing.current{
+  border:2px solid var(--gold);border-radius:10px;
+  padding:9px 10px;margin:2px 0;background:rgba(217,164,65,.1);
+}
+.standing.current+.standing{border-top:none}
+.standing .turn-tag{
+  flex:none;font-size:.62rem;font-weight:800;letter-spacing:.06em;color:var(--gold);
+  background:rgba(217,164,65,.15);border:1px solid var(--gold);border-radius:999px;
+  padding:4px 10px;white-space:nowrap;
+}
 
 .tutto-entry{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .tutto-entry .who{font-weight:800;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ivory)}
@@ -1826,24 +1836,26 @@ function liveTotalsTutto(){
 function renderGameTutto(){
   const finalTotals = totalsTutto();
   const liveTotals = liveTotalsTutto();
+  const curIdx = gameTutto.currentIdx;
+  const curName = gameTutto.players[curIdx];
   const order = gameTutto.players.map((p,i)=>({name:p, pts:liveTotals[i], idx:i})).sort((a,b)=>b.pts-a.pts);
   const max = Math.max(gameTutto.target, order[0]?order[0].pts:0);
   const standings = order.map((o,rank)=>{
     const pct = Math.max(0, Math.min(100, (o.pts/max)*100));
+    const isCurrent = o.idx===curIdx;
     return `
-    <div class="standing ${rank===0 && o.pts>0 ? 'leader':''}">
+    <div class="standing ${rank===0 && o.pts>0 ? 'leader':''} ${isCurrent?'current':''}">
       <div class="pos">${rank+1}</div>
       <div style="flex:1;min-width:0">
         <div class="name">${esc(o.name)}${gameTutto.turnTaken[o.idx]?' <small style="color:var(--ivory-dim);font-weight:600">✓ dran gewesen</small>':''}</div>
         <div class="bar"><i style="width:${pct}%"></i></div>
       </div>
+      ${isCurrent?'<span class="turn-tag">AM ZUG</span>':''}
       <div class="pts">${fmtNum(o.pts)}</div>
     </div>`;
   }).join('');
 
   const rn = gameTutto.rounds.length+1;
-  const curIdx = gameTutto.currentIdx;
-  const curName = gameTutto.players[curIdx];
 
   const quickVals = [-1000,50,150,300,500,1000,2000];
   const quick = quickVals.map(v=>{
