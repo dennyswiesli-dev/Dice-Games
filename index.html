@@ -678,6 +678,7 @@ function render(){
   if(starterPickState){ renderStarterPickGeneric(); return; }
   if(currentGame==='__overview__'){ renderOverallStats(); return; }
   if(currentGame==='__daily__'){ renderDailyStats(); return; }
+  if(currentGame==='__history__'){ renderGameHistory(); return; }
   if(!currentGame){ renderGamePicker(); return; }
   if(currentGame==='30er'){
     if(currentView==='scores') renderScores30(); else render30();
@@ -2698,12 +2699,16 @@ function renderDailyStats(){
   const winnersSorted = Object.entries(winCounts).sort((a,b)=>b[1]-a[1]);
   const empty = t => `<div class="hint">${t}</div>`;
 
-  const rowsHTML = entries.map(e=>`
+  const rowsHTML = entries.map(e=>{
+    const i = GAME_LOG.indexOf(e);
+    return `
     <div class="rank-item">
       <span class="pos" style="width:56px;font-family:'Nunito',sans-serif;font-size:.78rem;font-weight:700;color:var(--ivory-dim)">${new Date(e.ts).toLocaleTimeString('de-CH',{hour:'2-digit',minute:'2-digit'})}</span>
       <span class="n">${esc(GAME_LABELS[e.game]||e.game)}${e.score!==undefined?` · ${e.score} Pkt.`:''}<br><span style="font-size:.72rem;color:var(--ivory-dim);font-weight:600">${e.players.map(esc).join(', ')}</span></span>
       <span class="l">🏆 ${esc(e.winner)}</span>
-    </div>`).join('');
+      <button class="btn-ghost" style="flex:none;padding:6px 10px" onclick="deleteGameLogEntry(${i})" aria-label="Eintrag löschen">✕</button>
+    </div>`;
+  }).join('');
 
   app.innerHTML = `
     ${brandTitle('Dice-Games')}
@@ -2719,11 +2724,57 @@ function renderDailyStats(){
     </div>
     <div class="panel">
       <h2>🎲 Gespielte Partien</h2>
+      <div class="hint" style="margin:0 0 8px">Testpartie versehentlich mitgezählt? Mit ✕ direkt entfernen (nimmt auch Sieg/Teilnahme aus der Spielstatistik zurück).</div>
       ${entries.length ? rowsHTML : empty('Keine Partien an diesem Tag.')}
     </div>
+    <button class="btn-ghost btn-wide" onclick="currentGame='__history__';render()">📜 Alle Partien (kompletter Verlauf)</button>
+    <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="currentGame='__overview__';render()">← Zur Gesamtübersicht</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="backToPicker()">← Zur Spielauswahl</button>
+  `;
+}
+
+/* ---------- Partien-Verlauf: kompletter Log, einzeln löschbar ---------- */
+function deleteGameLogEntry(idx){
+  const entry = GAME_LOG[idx];
+  if(!entry) return;
+  showConfirm(`Partie "${GAME_LABELS[entry.game]||entry.game}" (Sieger: ${entry.winner}) wirklich löschen? Sieg/Teilnahme werden auch aus der Spielstatistik entfernt.`, ()=>{
+    const statObj = entry.game==='30er' ? STATS30 : entry.game==='tutto' ? STATS_TUTTO : STATS_YATZY;
+    const winnerStat = statObj.players[entry.winner];
+    if(winnerStat && winnerStat.wins>0) winnerStat.wins--;
+    (entry.players||[]).forEach(name=>{
+      const p = statObj.players[name];
+      if(p && p.games>0) p.games--;
+    });
+    if(entry.game==='30er') saveStats30();
+    else if(entry.game==='tutto') saveStatsTutto();
+    else saveStatsYatzy();
+    GAME_LOG.splice(idx,1);
+    saveGameLog();
+    render();
+  });
+}
+function renderGameHistory(){
+  const empty = t => `<div class="hint">${t}</div>`;
+  const rows = GAME_LOG.map((e,i)=>`
+    <div class="rank-item">
+      <span class="pos" style="width:auto;font-size:.72rem;font-weight:700;color:var(--ivory-dim)">${fmtDate(e.ts)}</span>
+      <span class="n">${esc(GAME_LABELS[e.game]||e.game)}${e.score!==undefined?` · ${e.score} Pkt.`:''}<br><span style="font-size:.72rem;color:var(--ivory-dim);font-weight:600">${(e.players||[]).map(esc).join(', ')}</span></span>
+      <span class="l" style="font-size:.85rem">🏆 ${esc(e.winner)}</span>
+      <button class="btn-ghost" style="flex:none;padding:6px 10px" onclick="deleteGameLogEntry(${i})" aria-label="Eintrag löschen">✕</button>
+    </div>`).join('');
+  app.innerHTML = `
+    ${brandTitle('Dice-Games')}
+    <div class="sub">Partien-Verlauf</div>
+    <div class="panel">
+      <h2>📜 Alle eingetragenen Partien (${GAME_LOG.length})</h2>
+      <div class="hint" style="margin:0 0 10px">Löscht eine Partie aus dem Verlauf und nimmt Sieg/Teilnahme aus der jeweiligen Spielstatistik zurück. Feinere Statistiken (z.&nbsp;B. schlechteste Würfe, höchste Abzüge) sind hiervon unabhängig — die lassen sich weiterhin nur komplett über "Statistiken zurücksetzen" im jeweiligen Spiel löschen.</div>
+      ${GAME_LOG.length ? rows : empty('Noch keine Partien erfasst.')}
+    </div>
+    <button class="btn-ghost btn-wide" onclick="currentGame='__daily__';render()">← Zur Tagesübersicht</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="currentGame='__overview__';render()">← Zur Gesamtübersicht</button>
   `;
 }
 
