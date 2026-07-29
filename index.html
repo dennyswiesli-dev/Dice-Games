@@ -410,6 +410,46 @@ function disambiguateNames(names){
   });
 }
 function brandTitle(txt){ return `<h1 class="brand-title"><img class="brand-logo" src="icon-192.png" alt="Logo">${txt}</h1>`; }
+function rotateToStart(arr, idx){ const n=arr.length; return Array.from({length:n}, (_,k)=>arr[(idx+k)%n]); }
+
+/* ---------- Gemeinsame "Wer beginnt?"-Auswahl (vor Spielstart/Revanche) ---------- */
+let starterPickState = null; // {names, title, idx, onConfirm, onBack}
+function showStarterPick(names, title, onConfirm, onBack){
+  starterPickState = {names, title, idx:0, onConfirm, onBack: onBack||null};
+  render();
+}
+function setStarterPickIdx(i){ starterPickState.idx = i; render(); }
+function confirmStarterPick(){
+  const {names, idx, onConfirm} = starterPickState;
+  const order = rotateToStart(names.map((_,i)=>i), idx);
+  starterPickState = null;
+  onConfirm(order);
+}
+function backFromStarterPick(){
+  const onBack = starterPickState && starterPickState.onBack;
+  starterPickState = null;
+  if(onBack) onBack(); else render();
+}
+function renderStarterPickGeneric(){
+  const {names, idx, title} = starterPickState;
+  const rows = names.map((n,i)=>`
+    <label class="opt ${idx===i?'on':''}" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px">
+      <input type="radio" name="starterPick" ${idx===i?'checked':''} onchange="setStarterPickIdx(${i})" style="width:20px;height:20px;accent-color:var(--gold)">
+      <span style="flex:1;font-weight:800">${esc(n)}</span>
+    </label>`).join('');
+  app.innerHTML = `
+    ${brandTitle(title)}
+    <div class="sub">Wer beginnt?</div>
+    <div class="panel">
+      <h2>Startspieler wählen</h2>
+      <div class="hint" style="margin:0 0 10px">Unabhängig von der Sitzreihenfolge oben — der Rest bleibt in derselben Reihenfolge, nur der Startpunkt verschiebt sich.</div>
+      ${rows}
+    </div>
+    <button class="btn-primary btn-wide" onclick="confirmStarterPick()">Los geht's 🎲</button>
+    <div style="height:8px"></div>
+    <button class="btn-ghost btn-wide" onclick="backFromStarterPick()">← Zurück</button>
+  `;
+}
 
 /* ---------- Spiele-Log (spielübergreifend, für Tages-Leaderboards) ---------- */
 const GAMELOG_KEY = 'dice-games-gamelog-v1';
@@ -635,6 +675,7 @@ function tabsHTML(){
 }
 
 function render(){
+  if(starterPickState){ renderStarterPickGeneric(); return; }
   if(currentGame==='__overview__'){ renderOverallStats(); return; }
   if(currentGame==='__daily__'){ renderDailyStats(); return; }
   if(!currentGame){ renderGamePicker(); return; }
@@ -999,7 +1040,7 @@ function renderSetup30(){
       ${step>1 ? `<button class="btn-ghost" onclick="setupStep30--;renderSetup30()">← Zurück</button>` : `<button class="btn-ghost" onclick="backToPicker()">← Spielauswahl</button>`}
       ${step<3
         ? `<button class="btn-primary" onclick="setupNext30()">Weiter →</button>`
-        : `<button class="btn-primary" onclick="startGame30()" ${setupPlayers30.length<2?'disabled':''}>Spiel starten 🎲</button>`}
+        : `<button class="btn-primary" onclick="startGame30_pickStarter()" ${setupPlayers30.length<2?'disabled':''}>Spiel starten 🎲</button>`}
     </div>
     ${step===1 && setupPlayers30.length<2 ? '<div class="hint" style="text-align:center">Mindestens 2 Spieler nötig.</div>' : ''}
   `;
@@ -1032,6 +1073,13 @@ function movePlayer30(i, dir){
   renderSetup30();
 }
 
+function startGame30_pickStarter(){
+  if(setupPlayers30.length<2) return;
+  showStarterPick(setupPlayers30.map(p=>p.name), `${setupOpts30.target}er&#8209;Spiel`, (order)=>{
+    setupPlayers30 = order.map(i=>setupPlayers30[i]);
+    startGame30();
+  }, ()=>renderSetup30());
+}
 function startGame30(){
   const dedupedNames = disambiguateNames(setupPlayers30.map(p=>p.name));
   const players = dedupedNames.map(name=>({name, lives:null, alive:true, minLives:null}));
@@ -1061,16 +1109,10 @@ function submitInit30(sum){
   addLog30(`<b>${esc(p.name)}</b> startet mit <b>${sum}</b> Leben.`);
   game30.initIdx++;
   if(game30.initIdx >= game30.players.length){
-    game30.phase='starter';
-    game30.starterIdx = 0;
+    game30.phase='roll';
+    game30.currentIdx=0;
+    game30.msg = {text:`Alle Startleben erwürfelt — ${esc(game30.players[0].name)} beginnt!`, type:'good', hitIdx:-1};
   }
-  render();
-}
-function setStarter30(i){ game30.starterIdx = i; render(); }
-function confirmStarter30(){
-  game30.phase='roll';
-  game30.currentIdx = game30.starterIdx || 0;
-  game30.msg = {text:`Alle Startleben erwürfelt — ${esc(game30.players[game30.currentIdx].name)} beginnt!`, type:'good', hitIdx:-1};
   render();
 }
 
@@ -1293,7 +1335,6 @@ function render30(){
   if(!game30){ renderSetup30(); return; }
   if(game30.phase==='winner'){ renderWinner30(); return; }
   if(game30.phase==='ranking'){ renderRanking30(); return; }
-  if(game30.phase==='starter'){ renderStarterPick30(); return; }
 
   const isInit = game30.phase==='init';
   const activeIdx = isInit ? game30.initIdx : game30.currentIdx;
@@ -1384,25 +1425,6 @@ function render30(){
   `;
 }
 
-function renderStarterPick30(){
-  const rows = game30.players.map((p,i)=>`
-    <label class="opt ${game30.starterIdx===i?'on':''}" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px">
-      <input type="radio" name="starter30" ${game30.starterIdx===i?'checked':''} onchange="setStarter30(${i})" style="width:20px;height:20px;accent-color:var(--gold)">
-      <span style="flex:1;font-weight:800">${esc(p.name)}</span>
-      <span style="font-family:'Bungee',cursive;color:var(--gold)">${p.lives}</span>
-    </label>`).join('');
-  app.innerHTML = `
-    ${brandTitle(`${game30.target}er&#8209;Spiel`)}
-    <div class="sub">Alle Startleben erwürfelt</div>
-    <div class="panel">
-      <h2>Wer beginnt?</h2>
-      <div class="hint" style="margin:0 0 10px">Unabhängig von der Sitzreihenfolge – wählt, wer den ersten Zug macht.</div>
-      ${rows}
-    </div>
-    <button class="btn-primary btn-wide" onclick="confirmStarter30()">Los geht's 🎲</button>
-  `;
-}
-
 function endZeroGame30(){
   showConfirm('Spiel beenden und Rangliste anzeigen?', ()=>{
     game30.phase='ranking';
@@ -1475,7 +1497,7 @@ function renderRanking30(){
     </div>
     ${reorderPickerHTML30()}
     ${directionPickerHTML30()}
-    <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
+    <button class="btn-primary btn-wide" onclick="rematch30_pickStarter()">Revanche (gleiche Runde)</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="fullReset30()">Neues Spiel</button>
   `;
@@ -1494,14 +1516,20 @@ function renderWinner30(){
     </div>
     ${reorderPickerHTML30()}
     ${directionPickerHTML30()}
-    <button class="btn-primary btn-wide" onclick="rematch30()">Revanche (gleiche Runde)</button>
+    <button class="btn-primary btn-wide" onclick="rematch30_pickStarter()">Revanche (gleiche Runde)</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="fullReset30()">Neues Spiel</button>
   `;
 }
 
+function rematch30_pickStarter(){
+  showStarterPick(game30.players.map(p=>p.name), `${game30.target}er&#8209;Spiel`, (order)=>{
+    game30.players = order.map(i=>game30.players[i]);
+    rematch30();
+  }, ()=>render());
+}
 function rematch30(){
-  game30.players.forEach(p=>{ p.lives=null; p.alive=true; });
+  game30.players.forEach(p=>{ p.lives=null; p.alive=true; p.minLives=null; });
   game30.phase='init';
   game30.initIdx=0;
   game30.currentIdx=0;
@@ -1722,7 +1750,7 @@ function renderSetupTutto(){
       ${step>1 ? `<button class="btn-ghost" onclick="setupStepTutto--;renderSetupTutto()">← Zurück</button>` : `<button class="btn-ghost" onclick="backToPicker()">← Spielauswahl</button>`}
       ${step<2
         ? `<button class="btn-primary" onclick="setupNextTutto()">Weiter →</button>`
-        : `<button class="btn-primary" onclick="startTutto()">Los geht's 🎲</button>`}
+        : `<button class="btn-primary" onclick="startTutto_pickStarter()">Los geht's 🎲</button>`}
     </div>
   `;
   if(step===1){
@@ -1747,6 +1775,20 @@ function moveTuttoField(i, dir){
   renderSetupTutto();
 }
 
+function startTutto_pickStarter(){
+  const names = disambiguateNames(setupPlayersTutto.map(n=>n.trim()).filter(Boolean));
+  if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
+  // Zielpunktzahl vor dem Wechsel zur Starterauswahl sichern, solange das
+  // Eingabefeld noch im DOM existiert.
+  let target = window._tuttoTarget || parseInt((($('#tuttoTarget')||{}).value), 10);
+  if(!target || target<500) target = 6000;
+  window._tuttoTarget = target;
+  setupPlayersTutto = names;
+  showStarterPick(names, 'Tutto!', (order)=>{
+    setupPlayersTutto = order.map(i=>names[i]);
+    startTutto();
+  }, ()=>renderSetupTutto());
+}
 function startTutto(){
   const names = disambiguateNames(setupPlayersTutto.map(n=>n.trim()).filter(Boolean));
   if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
@@ -2158,7 +2200,7 @@ function renderSetupYatzy(){
       ${step>1 ? `<button class="btn-ghost" onclick="setupStepYatzy--;renderSetupYatzy()">← Zurück</button>` : `<button class="btn-ghost" onclick="backToPicker()">← Spielauswahl</button>`}
       ${step<2
         ? `<button class="btn-primary" onclick="setupNextYatzy()">Weiter →</button>`
-        : `<button class="btn-primary" onclick="startYatzy()">Los geht's 🎲</button>`}
+        : `<button class="btn-primary" onclick="startYatzy_pickStarter()">Los geht's 🎲</button>`}
     </div>
   `;
   if(step===1){
@@ -2183,6 +2225,15 @@ function moveYatzyField(i, dir){
   renderSetupYatzy();
 }
 
+function startYatzy_pickStarter(){
+  const names = disambiguateNames(setupPlayersYatzy.map(n=>n.trim()).filter(Boolean));
+  if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
+  setupPlayersYatzy = names;
+  showStarterPick(names, 'Yatzy', (order)=>{
+    setupPlayersYatzy = order.map(i=>names[i]);
+    startYatzy();
+  }, ()=>renderSetupYatzy());
+}
 function startYatzy(){
   const names = disambiguateNames(setupPlayersYatzy.map(n=>n.trim()).filter(Boolean));
   if(names.length<2){ showAlert('Mindestens zwei Spieler eintragen.'); return; }
@@ -2364,6 +2415,12 @@ function fullResetYatzy(){
   currentGame=null;
   render();
 }
+function rematchYatzy_pickStarter(){
+  showStarterPick(gameYatzy.players.slice(), 'Yatzy', (order)=>{
+    gameYatzy.players = order.map(i=>gameYatzy.players[i]);
+    rematchYatzy();
+  }, ()=>render());
+}
 function rematchYatzy(){
   const names = gameYatzy.players.slice();
   const scores = names.map(()=>{ const s={}; YATZY_CATS.forEach(c=>s[c.id]=null); return s; });
@@ -2400,7 +2457,7 @@ function renderWinnerScreenYatzy(){
       ${rows}
     </div>
     ${reorderPickerHTMLYatzy()}
-    <button class="btn-primary btn-wide" onclick="rematchYatzy()">Revanche (gleiche Runde)</button>
+    <button class="btn-primary btn-wide" onclick="rematchYatzy_pickStarter()">Revanche (gleiche Runde)</button>
     <div style="height:8px"></div>
     <button class="btn-ghost btn-wide" onclick="fullResetYatzy()">Neues Spiel</button>
   `;
