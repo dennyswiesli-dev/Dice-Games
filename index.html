@@ -1919,15 +1919,30 @@ function quickStealTutto(){
   liveTotals.forEach((t,i)=>{ if(t>liveTotals[bestIdx]) bestIdx=i; });
   const curIdx = gameTutto.currentIdx;
   const curName = gameTutto.players[curIdx];
-  if(bestIdx!==curIdx){
-    gameTutto.roundInProgress[bestIdx] -= 1000;
-    addLogTutto(`<b>${esc(curName)}</b> klaut <b>1000</b> Punkte vom Spitzenreiter <b>${esc(gameTutto.players[bestIdx])}</b>.`);
-  } else {
-    addLogTutto(`<b>${esc(curName)}</b> ist bereits Spitzenreiter — der Punkteklau geht ins Leere.`);
+  if(bestIdx===curIdx){
+    // Wer bereits Spitzenreiter:in ist, kann sich nicht selbst bestehlen —
+    // weder Gutschrift noch Abzug passieren in diesem Fall.
+    addLogTutto(`<b>${esc(curName)}</b> ist bereits Spitzenreiter:in — der Punkteklau geht ins Leere.`);
+    saveTutto();
+    render();
+    showAlert(`Du bist schon Spitzenreiter:in — es passiert nichts.`);
+    return;
   }
+  gameTutto.roundInProgress[bestIdx] -= 1000;
   gameTutto.pendingInput = (gameTutto.pendingInput||0) + 1000;
+  addLogTutto(`<b>${esc(curName)}</b> klaut <b>1000</b> Punkte vom Spitzenreiter <b>${esc(gameTutto.players[bestIdx])}</b>.`);
   saveTutto();
   render();
+}
+
+function finalizeTuttoRound(){
+  const round = gameTutto.roundInProgress.slice();
+  gameTutto.rounds.push(round);
+  recordRoundTutto(round, gameTutto.players);
+  addLogTutto(`Runde ${gameTutto.rounds.length} abgeschlossen.`, 'round');
+  gameTutto.roundInProgress = gameTutto.players.map(()=>0);
+  gameTutto.turnTaken = gameTutto.players.map(()=>false);
+  gameTutto.currentIdx = 0;
 }
 
 function confirmTuttoTurn(){
@@ -1938,15 +1953,23 @@ function confirmTuttoTurn(){
   gameTutto.turnTaken[idx] = true;
   addLogTutto(`<b>${esc(name)}</b> trägt <b>${v>=0?'+':''}${fmtNum(v)}</b> ein → Rundenstand <b>${fmtNum(gameTutto.roundInProgress[idx])}</b>.`);
   gameTutto.pendingInput = 0;
+
+  // Sieg-Check: Spiel endet sofort, sobald jemand die Zielpunktzahl erreicht
+  // oder überschreitet — unabhängig davon, ob alle in dieser Runde schon
+  // an der Reihe waren. Die laufende Runde wird dabei mit den bisherigen
+  // (teils noch 0) Werten abgeschlossen.
+  const reached = liveTotalsTutto().some(v=>v>=gameTutto.target);
+  if(reached){
+    finalizeTuttoRound();
+    saveTutto();
+    render();
+    checkWinTutto(true);
+    return;
+  }
+
   const n = gameTutto.players.length;
   if(gameTutto.turnTaken.every(Boolean)){
-    const round = gameTutto.roundInProgress.slice();
-    gameTutto.rounds.push(round);
-    recordRoundTutto(round, gameTutto.players);
-    addLogTutto(`Runde ${gameTutto.rounds.length} abgeschlossen.`, 'round');
-    gameTutto.roundInProgress = gameTutto.players.map(()=>0);
-    gameTutto.turnTaken = gameTutto.players.map(()=>false);
-    gameTutto.currentIdx = 0;
+    finalizeTuttoRound();
   } else {
     let next = (idx+1) % n;
     while(gameTutto.turnTaken[next]) next = (next+1) % n;
