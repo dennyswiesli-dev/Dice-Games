@@ -1983,8 +1983,13 @@ function confirmTuttoTurn(){
   if(reached){
     finalizeTuttoRound();
     saveTutto();
-    render();
+    // Sieg zuerst auswerten (setzt gameTutto.finished + zeigt den Sieger-
+    // Screen), erst danach den Spielstand dahinter neu rendern. In der
+    // umgekehrten Reihenfolge löst render() → renderGameTutto() intern noch
+    // ein checkWinTutto(false) aus, das den Sieg ein zweites Mal auswertet
+    // (doppelter Sieger-Screen übereinander, doppelt gezählter Sieg).
     checkWinTutto(true);
+    render();
     return;
   }
 
@@ -1997,8 +2002,8 @@ function confirmTuttoTurn(){
     gameTutto.currentIdx = next;
   }
   saveTutto();
-  render();
   checkWinTutto(true);
+  render();
 }
 function undoRoundTutto(){
   if(!gameTutto.rounds.length) return;
@@ -2168,9 +2173,10 @@ function loadStatsYatzy(){
 let STATS_YATZY = loadStatsYatzy();
 function saveStatsYatzy(){ safeSetItem(YATZY_STATS_KEY, JSON.stringify(STATS_YATZY)); }
 function statPlayerYatzy(name){
-  if(!STATS_YATZY.players[name]) STATS_YATZY.players[name] = {wins:0, games:0, yatzyCount:0};
+  if(!STATS_YATZY.players[name]) STATS_YATZY.players[name] = {wins:0, games:0, yatzyCount:0, bestScore:null};
   const p = STATS_YATZY.players[name];
   if(p.yatzyCount===undefined) p.yatzyCount=0;
+  if(p.bestScore===undefined) p.bestScore=null;
   return p;
 }
 
@@ -2515,6 +2521,12 @@ function finishYatzy(){
     if(!STATS_YATZY.bestGame || best > STATS_YATZY.bestGame.total){
       STATS_YATZY.bestGame = {name:winnerName, total:best, d:Date.now()};
     }
+    // Persönliche Bestleistung: jede Person bekommt ihren eigenen Highscore
+    // aktualisiert, unabhängig davon, ob sie diese Partie gewonnen hat.
+    gameYatzy.players.forEach((name,pi)=>{
+      const sp = statPlayerYatzy(name);
+      if(sp.bestScore===null || totals[pi]>sp.bestScore) sp.bestScore = totals[pi];
+    });
     gameYatzy.winnerRecorded = true;
     addLogYatzy(`🏆 <b>${esc(winnerName)}</b> gewinnt mit ${best} Punkten.`, 'round');
     addGameLogEntry('yatzy', winnerName, gameYatzy.players.slice(), {score:best});
@@ -2607,6 +2619,7 @@ function moveRematchPlayerYatzy(i, dir){
 function renderScoresYatzy(){
   const byWins = Object.entries(STATS_YATZY.players).filter(([,v])=>v.wins>0).sort((a,b)=>b[1].wins-a[1].wins).slice(0,10);
   const byYatzy = Object.entries(STATS_YATZY.players).filter(([,v])=>v.yatzyCount>0).sort((a,b)=>b[1].yatzyCount-a[1].yatzyCount).slice(0,10);
+  const byBest = Object.entries(STATS_YATZY.players).filter(([,v])=>v.bestScore!==null).sort((a,b)=>b[1].bestScore-a[1].bestScore).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
   const avgDur = STATS_YATZY.durations.length ? STATS_YATZY.durations.reduce((a,b)=>a+b,0)/STATS_YATZY.durations.length : null;
   app.innerHTML = `
@@ -2625,6 +2638,10 @@ function renderScoresYatzy(){
     </div>
     <div class="panel"><h2>🚀 Höchste Punktzahl</h2>
       ${STATS_YATZY.bestGame ? `<div class="score-list"><div class="standing"><span class="pos">🥇</span><span class="name">${esc(STATS_YATZY.bestGame.name)}</span><span class="pts" style="color:var(--pip)">${STATS_YATZY.bestGame.total}</span></div></div><div class="hint" style="margin-top:4px">${fmtDate(STATS_YATZY.bestGame.d)}</div>` : empty('Noch keine Partie beendet.')}
+    </div>
+    <div class="panel"><h2>🎯 Persönliche Bestleistung</h2>
+      <div class="hint" style="margin:-4px 0 8px">Höchste je erreichte Punktzahl pro Spieler:in, unabhängig davon, ob die Partie gewonnen wurde.</div>
+      ${byBest.length ? `<ol class="score-list">${byBest.map(([n,v])=>`<li><span class="val">${v.bestScore}</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Partie beendet.')}
     </div>
     <button class="btn-ghost btn-wide" onclick="resetStatsYatzy()">Statistiken zurücksetzen</button>
     <div style="height:8px"></div>
