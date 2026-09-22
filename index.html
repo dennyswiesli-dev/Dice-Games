@@ -1615,13 +1615,14 @@ function loadStatsTutto(){
 let STATS_TUTTO = loadStatsTutto();
 function saveStatsTutto(){ safeSetItem(TUTTO_STATS_KEY, JSON.stringify(STATS_TUTTO)); }
 function statPlayerTutto(name){
-  if(!STATS_TUTTO.players[name]) STATS_TUTTO.players[name] = {wins:0, games:0, streak:0, maxStreak:0, totalPoints:0, totalRounds:0};
+  if(!STATS_TUTTO.players[name]) STATS_TUTTO.players[name] = {wins:0, games:0, streak:0, maxStreak:0, totalPoints:0, totalRounds:0, kleeblattWins:0};
   const p = STATS_TUTTO.players[name];
   // Rückwärtskompatibel: fehlende Felder ergänzen, falls aus älterer Version geladen
   if(p.streak===undefined) p.streak=0;
   if(p.maxStreak===undefined) p.maxStreak=0;
   if(p.totalPoints===undefined) p.totalPoints=0;
   if(p.totalRounds===undefined) p.totalRounds=0;
+  if(p.kleeblattWins===undefined) p.kleeblattWins=0;
   return p;
 }
 function recordRoundTutto(round, playerNames){
@@ -1899,6 +1900,7 @@ function renderGameTutto(){
       <input type="number" step="50" inputmode="numeric" placeholder="0" id="tuttoEntryInput" value="${gameTutto.pendingInput||''}">
       <button class="btn-primary btn-wide" style="margin-top:10px" onclick="confirmTuttoTurn()">Bestätigen ✓</button>
       <div class="hint">Punkte von Hand eintragen oder über die Buttons zusammenklicken. Minuspunkte (z.&nbsp;B. Strasse verpasst) einfach mit Minus eintragen. −1000 schreibt dir automatisch 1000 gut und zieht sie beim aktuellen Spitzenreiter ab. Leeres Feld zählt als 0.</div>
+      <button class="btn-ghost btn-wide" style="margin-top:10px" onclick="kleeblattWinTutto()">🍀 Kleeblatt 2× — Spiel sofort beenden</button>
     </div>
 
     ${logHTMLTutto()}
@@ -1964,6 +1966,25 @@ function finalizeTuttoRound(){
   gameTutto.roundInProgress = gameTutto.players.map(()=>0);
   gameTutto.turnTaken = gameTutto.players.map(()=>false);
   gameTutto.currentIdx = 0;
+}
+
+function kleeblattWinTutto(){
+  const idx = gameTutto.currentIdx;
+  const winnerName = gameTutto.players[idx];
+  showConfirm(`Kleeblatt zweimal gewürfelt von ${winnerName}? Das beendet die Partie sofort — ${winnerName} gewinnt automatisch, unabhängig vom aktuellen Punktestand. Fortfahren?`, ()=>{
+    finalizeTuttoRound();
+    gameTutto.finished = true;
+    const finalTotal = totalsTutto()[idx];
+    statPlayerTutto(winnerName).wins++;
+    statPlayerTutto(winnerName).kleeblattWins = (statPlayerTutto(winnerName).kleeblattWins||0)+1;
+    recordWinStreakTutto(winnerName, gameTutto.players);
+    saveStatsTutto();
+    saveTutto();
+    addLogTutto(`🍀 <b>${esc(winnerName)}</b> würfelt Kleeblatt zweimal — Spiel endet sofort!`, 'round');
+    addGameLogEntry('tutto', winnerName, gameTutto.players.slice(), {score:finalTotal, kleeblatt:true});
+    render();
+    renderWinnerTutto(winnerName, finalTotal, true);
+  });
 }
 
 function confirmTuttoTurn(){
@@ -2043,16 +2064,16 @@ function checkWinTutto(announce){
     renderWinnerTutto(gameTutto.players[bi], best);
   }
 }
-function renderWinnerTutto(name, score){
+function renderWinnerTutto(name, score, viaKleeblatt){
   const overlay = document.createElement('div');
   overlay.className = 'fx-overlay';
   overlay.style.pointerEvents = 'auto';
   overlay.style.background = 'rgba(24,28,38,.88)';
   overlay.innerHTML = `
     <div class="panel winner" style="max-width:340px;background:var(--ivory);color:var(--pip);pointer-events:auto">
-      <div class="crown">🎉</div>
+      <div class="crown">${viaKleeblatt?'🍀':'🎉'}</div>
       <div class="wname" style="color:var(--red)">${esc(name)}</div>
-      <p style="color:var(--pip)">hat gewonnen mit <b>${fmtNum(score)}</b> Punkten</p>
+      <p style="color:var(--pip)">${viaKleeblatt?`gewinnt sofort durch <b>Kleeblatt</b> (2×) — Stand <b>${fmtNum(score)}</b> Punkte`:`hat gewonnen mit <b>${fmtNum(score)}</b> Punkten`}</p>
       <button class="btn-primary btn-wide" onclick="this.closest('.fx-overlay').remove();resetTutto()">Neues Spiel</button>
       <div style="height:8px"></div>
       <button class="btn-ghost btn-wide" onclick="this.closest('.fx-overlay').remove()">Weiterspielen</button>
@@ -2067,6 +2088,7 @@ function renderScoresTutto(){
     .map(([n,v])=>[n, v, v.totalPoints/v.totalRounds])
     .sort((a,b)=>b[2]-a[2]).slice(0,10);
   const byStreak = Object.entries(STATS_TUTTO.players).filter(([,v])=>v.maxStreak>0).sort((a,b)=>b[1].maxStreak-a[1].maxStreak).slice(0,10);
+  const byKleeblatt = Object.entries(STATS_TUTTO.players).filter(([,v])=>v.kleeblattWins>0).sort((a,b)=>b[1].kleeblattWins-a[1].kleeblattWins).slice(0,10);
   const empty = t => `<div class="hint">${t}</div>`;
   app.innerHTML = `
     ${brandTitle('Tutto!')}
@@ -2077,6 +2099,10 @@ function renderScoresTutto(){
     </div>
     <div class="panel"><h2>🏆 Hall of Fame</h2>
       ${byWins.length ? `<ol class="score-list">${byWins.map(([n,v])=>`<li><span class="val">${v.wins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch keine Siege gespeichert.')}
+    </div>
+    <div class="panel"><h2>🍀 Kleeblatt-Siege</h2>
+      <div class="hint" style="margin:-4px 0 8px">Wie oft eine Partie durch Kleeblatt (2×) sofort beendet wurde.</div>
+      ${byKleeblatt.length ? `<ol class="score-list">${byKleeblatt.map(([n,v])=>`<li><span class="val">${v.kleeblattWins}×</span><span class="who">${esc(n)}</span><span class="meta">${v.games} Spiele</span></li>`).join('')}</ol>` : empty('Noch kein Kleeblatt-Sieg registriert.')}
     </div>
     <div class="panel"><h2>🔥 Beste Siegesserie</h2>
       <div class="hint" style="margin:-4px 0 8px">Wie viele Spiele in Folge jemand am Stück gewonnen hat.</div>
